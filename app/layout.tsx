@@ -8,6 +8,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { Toaster } from "@/components/ui/toaster";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import DiscordPromo from "@/components/DiscordPromo";
+import ProjectUpdaterWorker from "@/components/ProjectUpdaterWorker";
 
 export const metadata: Metadata = {
   title: "Code Gems - Discover Remarkable GitHub Projects",
@@ -88,6 +89,8 @@ export default function RootLayout({
           <Toaster />
           <Analytics />
           <SpeedInsights />
+          {/* Add the background worker component */}
+          <ProjectUpdaterWorker />
         </AuthProvider>
       </body>
     </html>
