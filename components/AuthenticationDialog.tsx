@@ -14,140 +14,76 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { LogIn, UserPlus, Mail, Lock, User, Gift, AlertCircle } from "lucide-react";
+import { Github, LogIn, UserPlus, Mail, Lock, User, Award, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface AuthDialogProps {
   trigger?: React.ReactNode;
-  defaultTab?: "login" | "register";
+  defaultTab?: "github" | "legacy" | "register";
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
 const AuthenticationDialog: React.FC<AuthDialogProps> = ({
   trigger,
-  defaultTab = "login",
+  defaultTab = "github",
   isOpen,
   onOpenChange,
 }) => {
   const [activeTab, setActiveTab] = useState<string>(defaultTab);
-  const [isLoading, setIsLoading] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { loginWithGitHub, loginWithCredentials, isLoading } = useAuth();
 
   // Login fields
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-
+  
   // Register fields
   const [registerUsername, setRegisterUsername] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
   const [registerDisplayName, setRegisterDisplayName] = useState("");
+  
+  // Field validation errors
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-  // Validation errors
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const { login, register } = useAuth();
+  const handleGitHubLogin = async () => {
+    try {
+      setError(null);
+      await loginWithGitHub();
+    } catch (err) {
+      setError("Failed to sign in with GitHub. Please try again.");
+    }
+  };
 
   const validateLogin = () => {
-    const newErrors: Record<string, string> = {};
-    setFormError(null);
-
+    const errors: Record<string, string> = {};
+    
     if (!loginUsername.trim()) {
-      newErrors.loginUsername = "Username is required";
+      errors.loginUsername = "Username is required";
     }
-
+    
     if (!loginPassword) {
-      newErrors.loginPassword = "Password is required";
+      errors.loginPassword = "Password is required";
     }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
-  const validateRegister = () => {
-    const newErrors: Record<string, string> = {};
-    setFormError(null);
-
-    if (!registerUsername.trim()) {
-      newErrors.registerUsername = "Username is required";
-    } else if (registerUsername.length < 3) {
-      newErrors.registerUsername =
-        "Username must be at least 3 characters long";
-    }
-
-    if (!registerEmail.trim()) {
-      newErrors.registerEmail = "Email is required";
-    } else if (!/\S+@\S+\.\S+/.test(registerEmail)) {
-      newErrors.registerEmail = "Invalid email format";
-    }
-
-    if (!registerPassword) {
-      newErrors.registerPassword = "Password is required";
-    } else if (registerPassword.length < 6) {
-      newErrors.registerPassword =
-        "Password must be at least 6 characters long";
-    }
-
-    if (registerPassword !== registerConfirmPassword) {
-      newErrors.registerConfirmPassword = "Passwords don't match";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const handleLegacyLogin = async () => {
     if (!validateLogin()) return;
-
-    setIsLoading(true);
-    setFormError(null);
-
+    
     try {
-      const success = await login(loginUsername, loginPassword);
-
+      setError(null);
+      const success = await loginWithCredentials(loginUsername, loginPassword);
+      
       if (success && onOpenChange) {
         onOpenChange(false);
-      } else if (!success) {
-        setFormError("Login failed. Please check your credentials and try again.");
       }
-    } catch (error) {
-      console.error("Login error:", error);
-      setFormError("An unexpected error occurred. Please try again later.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleRegisterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateRegister()) return;
-
-    setIsLoading(true);
-    setFormError(null);
-
-    try {
-      const success = await register(
-        registerUsername,
-        registerEmail,
-        registerPassword,
-        registerDisplayName || registerUsername
-      );
-
-      if (success && onOpenChange) {
-        onOpenChange(false);
-      } else if (!success) {
-        setFormError("Registration failed. The username or email might already be in use.");
-      }
-    } catch (error) {
-      console.error("Registration error:", error);
-      setFormError("An unexpected error occurred. Please try again later.");
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      setError("Failed to sign in. Please check your credentials and try again.");
     }
   };
 
@@ -158,17 +94,17 @@ const AuthenticationDialog: React.FC<AuthDialogProps> = ({
   const content = (
     <DialogContent className="bg-slate-800 border-slate-700 text-white sm:max-w-md">
       <DialogHeader>
-        <DialogTitle className="text-xl">Sign In or Register</DialogTitle>
+        <DialogTitle className="text-xl">Sign in to Code Gems</DialogTitle>
         <DialogDescription className="text-gray-400">
           Sign in to rate projects, leave comments, and unlock badges.
         </DialogDescription>
       </DialogHeader>
 
-      {formError && (
+      {error && (
         <Alert className="bg-red-500/20 border-red-500 mb-4">
           <AlertCircle className="h-4 w-4 text-red-400" />
           <AlertDescription className="text-red-200">
-            {formError}
+            {error}
           </AlertDescription>
         </Alert>
       )}
@@ -178,28 +114,63 @@ const AuthenticationDialog: React.FC<AuthDialogProps> = ({
         value={activeTab}
         onValueChange={(value) => {
           setActiveTab(value);
-          setFormError(null);
-          setErrors({});
+          setError(null);
+          setValidationErrors({});
         }}
         className="w-full"
       >
         <TabsList className="grid w-full grid-cols-2 bg-slate-700">
           <TabsTrigger
-            value="login"
+            value="github"
             className="data-[state=active]:bg-slate-900 data-[state=active]:text-white"
           >
-            <LogIn className="h-4 w-4 mr-2" /> Sign In
+            <Github className="h-4 w-4 mr-2" /> GitHub
           </TabsTrigger>
           <TabsTrigger
-            value="register"
+            value="legacy"
             className="data-[state=active]:bg-slate-900 data-[state=active]:text-white"
           >
-            <UserPlus className="h-4 w-4 mr-2" /> Register
+            <LogIn className="h-4 w-4 mr-2" /> Password
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="login" className="py-4">
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
+        <TabsContent value="github" className="py-4">
+          <div className="space-y-6">
+            <div className="bg-slate-700/50 rounded-lg p-3 flex items-start gap-2">
+              <Award className="text-purple-400 h-5 w-5 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-gray-300">
+                When you sign in with GitHub, you'll get your first badge and 10 points!
+              </p>
+            </div>
+
+            <Button
+              onClick={handleGitHubLogin}
+              className="w-full bg-black hover:bg-gray-900 text-white border border-gray-600 flex items-center justify-center gap-2"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  Connecting...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Github className="h-4 w-4" />
+                  Sign in with GitHub
+                </span>
+              )}
+            </Button>
+            
+            <div className="text-center text-sm text-gray-400">
+              <p>
+                By signing in, you agree to our terms of service and privacy policy.
+              </p>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="legacy" className="py-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="username" className="text-white">
                 Username
@@ -215,8 +186,8 @@ const AuthenticationDialog: React.FC<AuthDialogProps> = ({
                   className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400"
                 />
               </div>
-              {errors.loginUsername && (
-                <p className="text-red-400 text-sm">{errors.loginUsername}</p>
+              {validationErrors.loginUsername && (
+                <p className="text-red-400 text-sm">{validationErrors.loginUsername}</p>
               )}
             </div>
 
@@ -235,13 +206,13 @@ const AuthenticationDialog: React.FC<AuthDialogProps> = ({
                   className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400"
                 />
               </div>
-              {errors.loginPassword && (
-                <p className="text-red-400 text-sm">{errors.loginPassword}</p>
+              {validationErrors.loginPassword && (
+                <p className="text-red-400 text-sm">{validationErrors.loginPassword}</p>
               )}
             </div>
 
             <Button
-              type="submit"
+              onClick={handleLegacyLogin}
               className="w-full bg-purple-500 hover:bg-purple-600 text-white"
               disabled={isLoading}
             >
@@ -257,139 +228,13 @@ const AuthenticationDialog: React.FC<AuthDialogProps> = ({
                 </span>
               )}
             </Button>
-          </form>
-        </TabsContent>
-
-        <TabsContent value="register" className="py-4">
-          <form onSubmit={handleRegisterSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="register-username" className="text-white">
-                Username
-              </Label>
-              <div className="relative">
-                <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="register-username"
-                  type="text"
-                  placeholder="Choose a username"
-                  value={registerUsername}
-                  onChange={(e) => setRegisterUsername(e.target.value)}
-                  className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400"
-                />
-              </div>
-              {errors.registerUsername && (
-                <p className="text-red-400 text-sm">
-                  {errors.registerUsername}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="register-email" className="text-white">
-                Email
-              </Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="register-email"
-                  type="email"
-                  placeholder="your@email.com"
-                  value={registerEmail}
-                  onChange={(e) => setRegisterEmail(e.target.value)}
-                  className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400"
-                />
-              </div>
-              {errors.registerEmail && (
-                <p className="text-red-400 text-sm">{errors.registerEmail}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="register-display-name" className="text-white">
-                Display Name (optional)
-              </Label>
-              <div className="relative">
-                <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="register-display-name"
-                  type="text"
-                  placeholder="How would you like to be called?"
-                  value={registerDisplayName}
-                  onChange={(e) => setRegisterDisplayName(e.target.value)}
-                  className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="register-password" className="text-white">
-                Password
-              </Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="register-password"
-                  type="password"
-                  placeholder="Create a secure password"
-                  value={registerPassword}
-                  onChange={(e) => setRegisterPassword(e.target.value)}
-                  className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400"
-                />
-              </div>
-              {errors.registerPassword && (
-                <p className="text-red-400 text-sm">
-                  {errors.registerPassword}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="register-confirm-password" className="text-white">
-                Confirm Password
-              </Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="register-confirm-password"
-                  type="password"
-                  placeholder="Confirm password"
-                  value={registerConfirmPassword}
-                  onChange={(e) => setRegisterConfirmPassword(e.target.value)}
-                  className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400"
-                />
-              </div>
-              {errors.registerConfirmPassword && (
-                <p className="text-red-400 text-sm">
-                  {errors.registerConfirmPassword}
-                </p>
-              )}
-            </div>
-
-            <div className="bg-slate-700/50 rounded-lg p-3 flex items-start gap-2">
-              <Gift className="text-purple-400 h-5 w-5 mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-gray-300">
-                When you register, you'll get your first badge and 10 points!
+            
+            <div className="bg-purple-500/20 p-3 rounded-lg border border-purple-500/30">
+              <p className="text-sm text-purple-300">
+                <strong>New:</strong> Sign in with GitHub to enjoy a smoother experience!
               </p>
             </div>
-
-            <Button
-              type="submit"
-              className="w-full bg-purple-500 hover:bg-purple-600 text-white"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <span className="flex items-center gap-2">
-                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                  Registering...
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <UserPlus className="h-4 w-4" />
-                  Register
-                </span>
-              )}
-            </Button>
-          </form>
+          </div>
         </TabsContent>
       </Tabs>
     </DialogContent>
@@ -408,3 +253,4 @@ const AuthenticationDialog: React.FC<AuthDialogProps> = ({
 };
 
 export default AuthenticationDialog;
+
