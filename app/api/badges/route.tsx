@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 
-// Default badges to be created if none exist in the database
+
 const defaultBadges = [
+  // Existing Badges
   {
     id: "newcomer",
-    name: "Newcomer", // This will be used for lookups instead of id
+    name: "Newcomer",
     description: "Create an account",
     icon: "Gift",
     points: 10,
@@ -58,6 +59,202 @@ const defaultBadges = [
     description: "Reach level 10",
     icon: "Award",
     points: 150,
+  },
+  
+  // New Project-related Badges
+  {
+    id: "project_curator",
+    name: "Project Curator",
+    description: "Submit 5 projects that get accepted",
+    icon: "FolderPlus",
+    points: 200,
+  },
+  {
+    id: "discovery_guru",
+    name: "Discovery Guru",
+    description: "Submit 10 projects that get accepted",
+    icon: "Compass",
+    points: 500,
+  },
+  {
+    id: "trending_finder",
+    name: "Trending Finder",
+    description: "Submit a project that gets 50+ saves",
+    icon: "Trending",
+    points: 300,
+  },
+  
+  // New Ratings-related Badges
+  {
+    id: "review_expert",
+    name: "Review Expert",
+    description: "Write 25 ratings",
+    icon: "Star",
+    points: 200,
+  },
+  {
+    id: "review_guru",
+    name: "Review Guru",
+    description: "Write 50 ratings",
+    icon: "Stars",
+    points: 400,
+  },
+  {
+    id: "review_legend",
+    name: "Review Legend",
+    description: "Write 100 ratings",
+    icon: "Crown",
+    points: 1000,
+  },
+  {
+    id: "detailed_reviewer",
+    name: "Detailed Reviewer",
+    description: "Write 10 ratings with text reviews",
+    icon: "FileText",
+    points: 150,
+  },
+  
+  // New Comments-related Badges
+  {
+    id: "conversation_starter",
+    name: "Conversation Starter",
+    description: "Get 5 replies to your comments",
+    icon: "MessageCircle",
+    points: 100,
+  },
+  {
+    id: "discussion_expert",
+    name: "Discussion Expert",
+    description: "Write 25 comments",
+    icon: "MessageSquare",
+    points: 200,
+  },
+  {
+    id: "discussion_guru",
+    name: "Discussion Guru",
+    description: "Write 50 comments",
+    icon: "MessageSquare",
+    points: 400,
+  },
+  {
+    id: "community_voice",
+    name: "Community Voice",
+    description: "Write 100 comments",
+    icon: "MessageSquare",
+    points: 1000,
+  },
+  
+  // Activity-related Badges
+  {
+    id: "regular_visitor",
+    name: "Regular Visitor",
+    description: "Visit the site for 7 consecutive days",
+    icon: "Calendar",
+    points: 100,
+  },
+  {
+    id: "platform_enthusiast",
+    name: "Platform Enthusiast",
+    description: "Perform any activity for 30 consecutive days",
+    icon: "Calendar",
+    points: 300,
+  },
+  {
+    id: "early_adopter",
+    name: "Early Adopter",
+    description: "Be among the first 100 users",
+    icon: "Zap",
+    points: 200,
+  },
+  {
+    id: "veteran",
+    name: "Veteran",
+    description: "Account is older than 1 year",
+    icon: "Clock",
+    points: 250,
+  },
+  
+  // Social-related Badges
+  {
+    id: "community_helper",
+    name: "Community Helper",
+    description: "Help 5 users by replying to their questions",
+    icon: "HelpCircle",
+    points: 150,
+  },
+  {
+    id: "networking_pro",
+    name: "Networking Pro",
+    description: "Connect with 10 users through comments/interactions",
+    icon: "Users",
+    points: 200,
+  },
+  {
+    id: "discord_joiner",
+    name: "Discord Member",
+    description: "Join the Discord community",
+    icon: "MessageSquare",
+    points: 50,
+  },
+  
+  // Specialty-related Badges
+  {
+    id: "python_enthusiast",
+    name: "Python Enthusiast",
+    description: "Rate or comment on 5 Python projects",
+    icon: "Code",
+    points: 100,
+  },
+  {
+    id: "javascript_wizard",
+    name: "JavaScript Wizard",
+    description: "Rate or comment on 5 JavaScript projects",
+    icon: "Code",
+    points: 100,
+  },
+  {
+    id: "ai_navigator",
+    name: "AI Navigator",
+    description: "Rate or comment on 5 AI-related projects",
+    icon: "Brain",
+    points: 100,
+  },
+  {
+    id: "tool_explorer",
+    name: "Tool Explorer",
+    description: "Rate or comment on projects in 5 different categories",
+    icon: "Tool",
+    points: 150,
+  },
+  
+  // Milestone-related Badges
+  {
+    id: "bronze_milestone",
+    name: "Bronze Milestone",
+    description: "Reach level 15",
+    icon: "Award",
+    points: 200,
+  },
+  {
+    id: "silver_milestone",
+    name: "Silver Milestone",
+    description: "Reach level 25",
+    icon: "Award",
+    points: 300,
+  },
+  {
+    id: "gold_milestone",
+    name: "Gold Milestone",
+    description: "Reach level 50",
+    icon: "Award",
+    points: 500,
+  },
+  {
+    id: "platinum_milestone",
+    name: "Platinum Milestone",
+    description: "Reach level 100",
+    icon: "Award",
+    points: 1000,
   },
 ];
 

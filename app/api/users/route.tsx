@@ -483,7 +483,8 @@ export async function updateUser(request: Request) {
 
 // This replaces the checkBadges function in app/api/users/route.tsx
 
-// Check badges
+// In app/api/users/route.tsx, modify the checkBadges function to handle the new badges:
+
 export async function checkBadges(request: Request) {
   try {
     const body = await request.json();
@@ -546,44 +547,138 @@ export async function checkBadges(request: Request) {
     console.log(`Current points: ${currentPoints}`);
     let pointsEarned = 0;
 
-const newcomerBadge = badges.find(b => b.name === "Newcomer");
-if (!userBadges.includes(newcomerBadge?.name) && newcomerBadge) {
-  console.log("Awarding newcomer badge with ID:", newcomerBadge.name);
-  earnedBadges.push(newcomerBadge);
-  userBadges.push(newcomerBadge.name);
-  pointsEarned += newcomerBadge.points;
-}
+    // BASIC BADGES
+
+    // Newcomer badge
+    const newcomerBadge = badges.find(b => b.name === "Newcomer");
+    if (!userBadges.includes(newcomerBadge?.name) && newcomerBadge) {
+      console.log("Awarding newcomer badge with ID:", newcomerBadge.name);
+      earnedBadges.push(newcomerBadge);
+      userBadges.push(newcomerBadge.name);
+      pointsEarned += newcomerBadge.points;
+    }
+
+    // PROJECT-RELATED CHECKS
+    
+    // Explorer badge (first project)
+    const explorerBadge = badges.find(b => b.name === "Explorer");
+    
+    // Get count of accepted project requests
+    const { data: projectRequests, error: projectsError } = await supabase
+      .from('project_requests')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('status', 'accepted');
+      
+    if (!projectsError) {
+      const acceptedProjects = projectRequests?.length || 0;
+      console.log(`User has ${acceptedProjects} accepted projects`);
+      
+      // First project badge
+      if (acceptedProjects > 0 && !userBadges.includes("Explorer") && explorerBadge) {
+        console.log("Awarding Explorer badge");
+        earnedBadges.push(explorerBadge);
+        userBadges.push(explorerBadge.name);
+        pointsEarned += explorerBadge.points;
+      }
+      
+      // Project Curator badge (5 projects)
+      const curatorBadge = badges.find(b => b.name === "Project Curator");
+      if (acceptedProjects >= 5 && !userBadges.includes("Project Curator") && curatorBadge) {
+        console.log("Awarding Project Curator badge");
+        earnedBadges.push(curatorBadge);
+        userBadges.push(curatorBadge.name);
+        pointsEarned += curatorBadge.points;
+      }
+      
+      // Discovery Guru badge (10 projects)
+      const guruBadge = badges.find(b => b.name === "Discovery Guru");
+      if (acceptedProjects >= 10 && !userBadges.includes("Discovery Guru") && guruBadge) {
+        console.log("Awarding Discovery Guru badge");
+        earnedBadges.push(guruBadge);
+        userBadges.push(guruBadge.name);
+        pointsEarned += guruBadge.points;
+      }
+      
+      // Trending Finder badge (project with 50+ saves)
+      // This would require additional query to check if any of the user's projects have 50+ saves
+      // Implementation would depend on how saves are tracked
+    }
+    
+    // RATINGS-RELATED CHECKS
 
     // Check ratings count
     const { data: ratings, error: ratingsError } = await supabase
       .from('ratings')
-      .select('id')
+      .select('id, review')
       .eq('user_id', userId);
 
     if (!ratingsError) {
       const ratingsCount = ratings?.length || 0;
       console.log(`User has ${ratingsCount} ratings`);
+      
+      // Detailed reviews count
+      const detailedReviews = ratings?.filter(r => r.review && r.review.trim().length > 0)?.length || 0;
 
       // First rating badge
-const firstRatingBadge = badges.find(b => b.name === "Critic");
-if (ratingsCount > 0 && !userBadges.includes("Critic") && firstRatingBadge) {
-  console.log("Awarding Critic badge");
-  earnedBadges.push(firstRatingBadge);
-  userBadges.push(firstRatingBadge.name);
-  pointsEarned += firstRatingBadge.points;
-}
+      const firstRatingBadge = badges.find(b => b.name === "Critic");
+      if (ratingsCount > 0 && !userBadges.includes("Critic") && firstRatingBadge) {
+        console.log("Awarding Critic badge");
+        earnedBadges.push(firstRatingBadge);
+        userBadges.push(firstRatingBadge.name);
+        pointsEarned += firstRatingBadge.points;
+      }
 
-const rating10Badge = badges.find(b => b.name === "Rating Master");
-if (ratingsCount >= 10 && !userBadges.includes("Rating Master") && rating10Badge) {
-  console.log("Awarding Rating Master badge");
-  earnedBadges.push(rating10Badge);
-  userBadges.push(rating10Badge.name);
-  pointsEarned += rating10Badge.points;
-}
+      // Rating Master badge (10 ratings)
+      const rating10Badge = badges.find(b => b.name === "Rating Master");
+      if (ratingsCount >= 10 && !userBadges.includes("Rating Master") && rating10Badge) {
+        console.log("Awarding Rating Master badge");
+        earnedBadges.push(rating10Badge);
+        userBadges.push(rating10Badge.name);
+        pointsEarned += rating10Badge.points;
+      }
+      
+      // Review Expert badge (25 ratings)
+      const reviewExpertBadge = badges.find(b => b.name === "Review Expert");
+      if (ratingsCount >= 25 && !userBadges.includes("Review Expert") && reviewExpertBadge) {
+        console.log("Awarding Review Expert badge");
+        earnedBadges.push(reviewExpertBadge);
+        userBadges.push(reviewExpertBadge.name);
+        pointsEarned += reviewExpertBadge.points;
+      }
+      
+      // Review Guru badge (50 ratings)
+      const reviewGuruBadge = badges.find(b => b.name === "Review Guru");
+      if (ratingsCount >= 50 && !userBadges.includes("Review Guru") && reviewGuruBadge) {
+        console.log("Awarding Review Guru badge");
+        earnedBadges.push(reviewGuruBadge);
+        userBadges.push(reviewGuruBadge.name);
+        pointsEarned += reviewGuruBadge.points;
+      }
+      
+      // Review Legend badge (100 ratings)
+      const reviewLegendBadge = badges.find(b => b.name === "Review Legend");
+      if (ratingsCount >= 100 && !userBadges.includes("Review Legend") && reviewLegendBadge) {
+        console.log("Awarding Review Legend badge");
+        earnedBadges.push(reviewLegendBadge);
+        userBadges.push(reviewLegendBadge.name);
+        pointsEarned += reviewLegendBadge.points;
+      }
+      
+      // Detailed Reviewer badge (10 ratings with text)
+      const detailedReviewerBadge = badges.find(b => b.name === "Detailed Reviewer");
+      if (detailedReviews >= 10 && !userBadges.includes("Detailed Reviewer") && detailedReviewerBadge) {
+        console.log("Awarding Detailed Reviewer badge");
+        earnedBadges.push(detailedReviewerBadge);
+        userBadges.push(detailedReviewerBadge.name);
+        pointsEarned += detailedReviewerBadge.points;
+      }
     } else {
       console.error("Error checking ratings:", ratingsError);
     }
 
+    // COMMENTS-RELATED CHECKS
+    
     // Check comments count
     const { data: comments, error: commentsError } = await supabase
       .from('comments')
@@ -595,26 +690,74 @@ if (ratingsCount >= 10 && !userBadges.includes("Rating Master") && rating10Badge
       console.log(`User has ${commentsCount} comments`);
 
       // First comment badge
-const firstCommentBadge = badges.find(b => b.name === "Commentator");
-if (commentsCount > 0 && !userBadges.includes("Commentator") && firstCommentBadge) {
-  console.log("Awarding Commentator badge");
-  earnedBadges.push(firstCommentBadge);
-  userBadges.push(firstCommentBadge.name);
-  pointsEarned += firstCommentBadge.points;
-}
+      const firstCommentBadge = badges.find(b => b.name === "Commentator");
+      if (commentsCount > 0 && !userBadges.includes("Commentator") && firstCommentBadge) {
+        console.log("Awarding Commentator badge");
+        earnedBadges.push(firstCommentBadge);
+        userBadges.push(firstCommentBadge.name);
+        pointsEarned += firstCommentBadge.points;
+      }
 
       // 10 comments badge
-const comment10Badge = badges.find(b => b.name === "Discussion Master");
-if (commentsCount >= 10 && !userBadges.includes("Discussion Master") && comment10Badge) {
-  console.log("Awarding Discussion Master badge");
-  earnedBadges.push(comment10Badge);
-  userBadges.push(comment10Badge.name);
-  pointsEarned += comment10Badge.points;
-}
+      const comment10Badge = badges.find(b => b.name === "Discussion Master");
+      if (commentsCount >= 10 && !userBadges.includes("Discussion Master") && comment10Badge) {
+        console.log("Awarding Discussion Master badge");
+        earnedBadges.push(comment10Badge);
+        userBadges.push(comment10Badge.name);
+        pointsEarned += comment10Badge.points;
+      }
+      
+      // Discussion Expert badge (25 comments)
+      const discussionExpertBadge = badges.find(b => b.name === "Discussion Expert");
+      if (commentsCount >= 25 && !userBadges.includes("Discussion Expert") && discussionExpertBadge) {
+        console.log("Awarding Discussion Expert badge");
+        earnedBadges.push(discussionExpertBadge);
+        userBadges.push(discussionExpertBadge.name);
+        pointsEarned += discussionExpertBadge.points;
+      }
+      
+      // Discussion Guru badge (50 comments)
+      const discussionGuruBadge = badges.find(b => b.name === "Discussion Guru");
+      if (commentsCount >= 50 && !userBadges.includes("Discussion Guru") && discussionGuruBadge) {
+        console.log("Awarding Discussion Guru badge");
+        earnedBadges.push(discussionGuruBadge);
+        userBadges.push(discussionGuruBadge.name);
+        pointsEarned += discussionGuruBadge.points;
+      }
+      
+      // Community Voice badge (100 comments)
+      const communityVoiceBadge = badges.find(b => b.name === "Community Voice");
+      if (commentsCount >= 100 && !userBadges.includes("Community Voice") && communityVoiceBadge) {
+        console.log("Awarding Community Voice badge");
+        earnedBadges.push(communityVoiceBadge);
+        userBadges.push(communityVoiceBadge.name);
+        pointsEarned += communityVoiceBadge.points;
+      }
+      
+      // To check for the conversation starter badge, we'd need to count replies to the user's comments
+      // This would require a more complex query that counts where parent_id matches one of the user's comment IDs
     } else {
       console.error("Error checking comments:", commentsError);
     }
+    
+    // ACCOUNT AGE RELATED
+    
+    // Check account age for Veteran badge
+    const accountCreationDate = new Date(user.created_at);
+    const now = new Date();
+    const accountAgeInDays = Math.floor((now.getTime() - accountCreationDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // Veteran badge (1 year)
+    const veteranBadge = badges.find(b => b.name === "Veteran");
+    if (accountAgeInDays >= 365 && !userBadges.includes("Veteran") && veteranBadge) {
+      console.log("Awarding Veteran badge");
+      earnedBadges.push(veteranBadge);
+      userBadges.push(veteranBadge.name);
+      pointsEarned += veteranBadge.points;
+    }
 
+    // LEVEL RELATED BADGES
+    
     // Calculate level based on points
     const totalPoints = currentPoints + pointsEarned;
     const newLevel = Math.floor(totalPoints / 100) + 1;
@@ -622,23 +765,67 @@ if (commentsCount >= 10 && !userBadges.includes("Discussion Master") && comment1
     console.log(`Points: ${totalPoints}, New level: ${newLevel}, Level up: ${levelUp}`);
     
     // Check for level badges
-    if (newLevel >= 5 && !userBadges.includes("level_5")) {
-      const level5Badge = badges.find(b => b.name === "level_5");
+    if (newLevel >= 5 && !userBadges.includes("Advanced")) {
+      const level5Badge = badges.find(b => b.name === "Advanced");
       if (level5Badge) {
-        console.log("Awarding level_5 badge");
+        console.log("Awarding Advanced badge");
         earnedBadges.push(level5Badge);
-        userBadges.push("level_5");
+        userBadges.push("Advanced");
         pointsEarned += level5Badge.points;
       }
     }
 
-    if (newLevel >= 10 && !userBadges.includes("level_10")) {
-      const level10Badge = badges.find(b => b.name === "level_10");
+    if (newLevel >= 10 && !userBadges.includes("Expert")) {
+      const level10Badge = badges.find(b => b.name === "Expert");
       if (level10Badge) {
-        console.log("Awarding level_10 badge");
+        console.log("Awarding Expert badge");
         earnedBadges.push(level10Badge);
-        userBadges.push("level_10");
+        userBadges.push("Expert");
         pointsEarned += level10Badge.points;
+      }
+    }
+    
+    // Bronze Milestone (Level 15)
+    if (newLevel >= 15 && !userBadges.includes("Bronze Milestone")) {
+      const bronzeBadge = badges.find(b => b.name === "Bronze Milestone");
+      if (bronzeBadge) {
+        console.log("Awarding Bronze Milestone badge");
+        earnedBadges.push(bronzeBadge);
+        userBadges.push("Bronze Milestone");
+        pointsEarned += bronzeBadge.points;
+      }
+    }
+    
+    // Silver Milestone (Level 25)
+    if (newLevel >= 25 && !userBadges.includes("Silver Milestone")) {
+      const silverBadge = badges.find(b => b.name === "Silver Milestone");
+      if (silverBadge) {
+        console.log("Awarding Silver Milestone badge");
+        earnedBadges.push(silverBadge);
+        userBadges.push("Silver Milestone");
+        pointsEarned += silverBadge.points;
+      }
+    }
+    
+    // Gold Milestone (Level 50)
+    if (newLevel >= 50 && !userBadges.includes("Gold Milestone")) {
+      const goldBadge = badges.find(b => b.name === "Gold Milestone");
+      if (goldBadge) {
+        console.log("Awarding Gold Milestone badge");
+        earnedBadges.push(goldBadge);
+        userBadges.push("Gold Milestone");
+        pointsEarned += goldBadge.points;
+      }
+    }
+    
+    // Platinum Milestone (Level 100)
+    if (newLevel >= 100 && !userBadges.includes("Platinum Milestone")) {
+      const platinumBadge = badges.find(b => b.name === "Platinum Milestone");
+      if (platinumBadge) {
+        console.log("Awarding Platinum Milestone badge");
+        earnedBadges.push(platinumBadge);
+        userBadges.push("Platinum Milestone");
+        pointsEarned += platinumBadge.points;
       }
     }
 
