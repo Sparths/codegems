@@ -565,22 +565,21 @@ if (!userBadges.includes(newcomerBadge?.name) && newcomerBadge) {
       console.log(`User has ${ratingsCount} ratings`);
 
       // First rating badge
-      const firstRatingBadge = badges.find(b => b.name === "first_rating");
-      if (ratingsCount > 0 && !userBadges.includes("first_rating") && firstRatingBadge) {
-        console.log("Awarding first_rating badge");
-        earnedBadges.push(firstRatingBadge);
-        userBadges.push("first_rating");
-        pointsEarned += firstRatingBadge.points;
-      }
+const firstRatingBadge = badges.find(b => b.name === "Critic");
+if (ratingsCount > 0 && !userBadges.includes("Critic") && firstRatingBadge) {
+  console.log("Awarding Critic badge");
+  earnedBadges.push(firstRatingBadge);
+  userBadges.push(firstRatingBadge.name);
+  pointsEarned += firstRatingBadge.points;
+}
 
-      // 10 ratings badge
-      const rating10Badge = badges.find(b => b.name === "rating_10");
-      if (ratingsCount >= 10 && !userBadges.includes("rating_10") && rating10Badge) {
-        console.log("Awarding rating_10 badge");
-        earnedBadges.push(rating10Badge);
-        userBadges.push("rating_10");
-        pointsEarned += rating10Badge.points;
-      }
+const rating10Badge = badges.find(b => b.name === "Rating Master");
+if (ratingsCount >= 10 && !userBadges.includes("Rating Master") && rating10Badge) {
+  console.log("Awarding Rating Master badge");
+  earnedBadges.push(rating10Badge);
+  userBadges.push(rating10Badge.name);
+  pointsEarned += rating10Badge.points;
+}
     } else {
       console.error("Error checking ratings:", ratingsError);
     }
@@ -596,22 +595,22 @@ if (!userBadges.includes(newcomerBadge?.name) && newcomerBadge) {
       console.log(`User has ${commentsCount} comments`);
 
       // First comment badge
-      const firstCommentBadge = badges.find(b => b.name === "first_comment");
-      if (commentsCount > 0 && !userBadges.includes("first_comment") && firstCommentBadge) {
-        console.log("Awarding first_comment badge");
-        earnedBadges.push(firstCommentBadge);
-        userBadges.push("first_comment");
-        pointsEarned += firstCommentBadge.points;
-      }
+const firstCommentBadge = badges.find(b => b.name === "Commentator");
+if (commentsCount > 0 && !userBadges.includes("Commentator") && firstCommentBadge) {
+  console.log("Awarding Commentator badge");
+  earnedBadges.push(firstCommentBadge);
+  userBadges.push(firstCommentBadge.name);
+  pointsEarned += firstCommentBadge.points;
+}
 
       // 10 comments badge
-      const comment10Badge = badges.find(b => b.name === "comment_10");
-      if (commentsCount >= 10 && !userBadges.includes("comment_10") && comment10Badge) {
-        console.log("Awarding comment_10 badge");
-        earnedBadges.push(comment10Badge);
-        userBadges.push("comment_10");
-        pointsEarned += comment10Badge.points;
-      }
+const comment10Badge = badges.find(b => b.name === "Discussion Master");
+if (commentsCount >= 10 && !userBadges.includes("Discussion Master") && comment10Badge) {
+  console.log("Awarding Discussion Master badge");
+  earnedBadges.push(comment10Badge);
+  userBadges.push(comment10Badge.name);
+  pointsEarned += comment10Badge.points;
+}
     } else {
       console.error("Error checking comments:", commentsError);
     }

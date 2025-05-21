@@ -214,7 +214,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email: userData.email,
         points: userData.points || 0,
         level: userData.level || 1,
-        badges: userData.badges || ["newcomer"],
+        badges: userData.badges || ["Newcomer"],
         avatarUrl: userData.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`,
         token: generateSalt(), // Simple token
         tokenExpiration: Date.now() + TOKEN_EXPIRATION_TIME
