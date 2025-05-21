@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
+import { generateUUID } from "@/lib/utils-uuid";
+
 
 // GET: Fetch comments
 export async function GET(request: Request) {
@@ -41,6 +43,7 @@ export async function GET(request: Request) {
 
 // POST: Create a new comment
 export async function POST(request: Request) {
+  
   try {
     const body = await request.json();
     const { projectName, userId, text, parentId } = body;
@@ -115,7 +118,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const commentId = `comment_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const commentId = generateUUID(); // Use UUID instead of timestamp + random string
     console.log(`Creating comment with ID: ${commentId}`);
 
     const newComment = {
@@ -142,34 +145,63 @@ export async function POST(request: Request) {
 
     console.log("Comment created successfully");
 
-    // Award points for new comment
-    try {
-      const { data: userData, error: getUserError } = await supabase
-        .from('users')
-        .select('points, badges')
-        .eq('id', userId)
-        .single();
+    // Replace the badge check portion in app/api/comments/route.tsx
+// Find the section after successfully creating a comment
 
-      if (getUserError) {
-        console.error("Error getting user data for points:", getUserError);
-      } else if (userData) {
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({
-            points: (userData.points || 0) + 2
-          })
-          .eq('id', userId);
-          
-        if (updateError) {
-          console.error("Error updating user points:", updateError);
-        } else {
-          console.log("User points updated successfully");
-        }
-      }
-    } catch (pointsError) {
-      console.error("Error awarding points:", pointsError);
-      // Continue execution - points award failure shouldn't stop comment submission
+// Award points for new comment and check badges
+try {
+  // First update the points
+  const { data: userData, error: getUserError } = await supabase
+    .from('users')
+    .select('points, badges')
+    .eq('id', userId)
+    .single();
+
+  if (getUserError) {
+    console.error("Error getting user data for points:", getUserError);
+  } else if (userData) {
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({
+        points: (userData.points || 0) + 2
+      })
+      .eq('id', userId);
+      
+    if (updateError) {
+      console.error("Error updating user points:", updateError);
+    } else {
+      console.log("User points updated successfully");
     }
+  }
+  
+  // Now check for badges
+  const badgeResponse = await fetch("/api/users?action=check_badges", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      userId: userId,
+    }),
+  });
+
+  if (badgeResponse.ok) {
+    const badgeData = await badgeResponse.json();
+    
+    if (badgeData.earnedBadges && badgeData.earnedBadges.length > 0) {
+      console.log("Badges earned:", badgeData.earnedBadges.map((b: { name: any; }) => b.name).join(", "));
+    }
+    
+    if (badgeData.levelUp) {
+      console.log(`User leveled up to level ${badgeData.currentLevel}`);
+    }
+  } else {
+    console.error("Error checking badges:", await badgeResponse.text());
+  }
+} catch (pointsError) {
+  console.error("Error awarding points/badges:", pointsError);
+  // Continue execution - points/badge award failure shouldn't stop comment submission
+}
 
     return NextResponse.json(newComment);
   } catch (error) {

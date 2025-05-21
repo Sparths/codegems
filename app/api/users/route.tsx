@@ -130,6 +130,9 @@ export async function GET(request: Request) {
   }
 }
 
+// This updates the createUser function in app/api/users/route.tsx
+// Find the part where it creates the new user object
+
 // Create user (Registration)
 export async function createUser(request: Request) {
   try {
@@ -202,6 +205,9 @@ export async function createUser(request: Request) {
       .pbkdf2Sync(password, salt, 1000, 64, "sha512")
       .toString("hex");
 
+    // Ensure the newcomer badge is added
+    const badges = ["newcomer"];
+    
     const newUser = {
       id: `user_${Date.now()}`,
       username,
@@ -211,12 +217,12 @@ export async function createUser(request: Request) {
       salt,
       points: 10, // Starting points
       level: 1,
-      badges: ["newcomer"], // Newcomer badge
+      badges, // Newcomer badge
       created_at: new Date().toISOString(),
       avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`, // Generated avatar
     };
 
-    console.log(`Creating new user with ID: ${newUser.id}`);
+    console.log(`Creating new user with ID: ${newUser.id}, badges: ${newUser.badges.join(', ')}`);
 
     const { error: insertError } = await supabase.from('users').insert(newUser);
 
@@ -230,7 +236,7 @@ export async function createUser(request: Request) {
 
     // Return user without sensitive data
     const { password_hash: _, salt: __, ...userData } = newUser;
-    console.log("User created successfully");
+    console.log("User created successfully with badges:", userData.badges);
     return NextResponse.json(userData);
   } catch (error) {
     console.error("Error in createUser route:", error);
@@ -475,6 +481,8 @@ export async function updateUser(request: Request) {
   }
 }
 
+// This replaces the checkBadges function in app/api/users/route.tsx
+
 // Check badges
 export async function checkBadges(request: Request) {
   try {
@@ -490,6 +498,7 @@ export async function checkBadges(request: Request) {
       );
     }
 
+    // Get user data
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
@@ -507,6 +516,7 @@ export async function checkBadges(request: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // Get all badges
     const { data: badges, error: badgesError } = await supabase
       .from('badges')
       .select('*');
@@ -531,8 +541,19 @@ export async function checkBadges(request: Request) {
 
     const earnedBadges: Badge[] = [];
     let userBadges = [...(user.badges || [])];
+    let currentPoints = user.points || 0;
     console.log(`Current badges: ${userBadges.join(', ')}`);
+    console.log(`Current points: ${currentPoints}`);
     let pointsEarned = 0;
+
+    // Ensure the newcomer badge is awarded
+    const newcomerBadge = badges.find(b => b.id === "newcomer");
+    if (!userBadges.includes("newcomer") && newcomerBadge) {
+      console.log("Awarding newcomer badge");
+      earnedBadges.push(newcomerBadge);
+      userBadges.push("newcomer");
+      pointsEarned += newcomerBadge.points;
+    }
 
     // Check ratings count
     const { data: ratings, error: ratingsError } = await supabase
@@ -597,7 +618,7 @@ export async function checkBadges(request: Request) {
     }
 
     // Calculate level based on points
-    const totalPoints = user.points + pointsEarned;
+    const totalPoints = currentPoints + pointsEarned;
     const newLevel = Math.floor(totalPoints / 100) + 1;
     const levelUp = newLevel > user.level;
     console.log(`Points: ${totalPoints}, New level: ${newLevel}, Level up: ${levelUp}`);
@@ -626,6 +647,7 @@ export async function checkBadges(request: Request) {
     // Update user if badges or points changed
     if (earnedBadges.length > 0 || levelUp) {
       console.log(`Updating user with ${earnedBadges.length} new badges, ${pointsEarned} points, level ${newLevel}`);
+      console.log(`New badges list: ${userBadges.join(', ')}`);
       
       const { error: updateError } = await supabase
         .from('users')

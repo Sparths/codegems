@@ -23,6 +23,9 @@ import {
 } from "@/components/ui/tooltip";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/app/context/AuthContext";
+import AuthenticationDialog from "@/components/AuthenticationDialog";
 import supabase from "@/lib/supabase";
 
 interface Language {
@@ -149,7 +152,11 @@ const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { savedProjects, addProject, removeProject } = useSaved();
+  const { isAuthenticated } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
+  
   const isSaved = savedProjects.includes(projectName);
 
   useEffect(() => {
@@ -185,6 +192,17 @@ const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({
   }, [projectName]);
 
   const toggleSave = () => {
+    if (!isAuthenticated) {
+      // Show authentication dialog if not logged in
+      toast({
+        title: "Sign in required",
+        description: "You need to be signed in to save projects.",
+        variant: "destructive",
+      });
+      setShowAuthDialog(true);
+      return;
+    }
+    
     if (isSaved) {
       removeProject(projectName);
     } else {
@@ -329,6 +347,12 @@ const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({
           </Card>
         </div>
       </div>
+
+      {/* Authentication Dialog */}
+      <AuthenticationDialog
+        isOpen={showAuthDialog}
+        onOpenChange={setShowAuthDialog}
+      />
     </div>
   );
 };

@@ -393,7 +393,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return false;
       }
 
+      
+
       console.log('User registration successful');
+
+      
 
       // Format the user object for the frontend
       const formattedUser: User = {
@@ -408,6 +412,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         token: generateSalt(),
         tokenExpiration: Date.now() + TOKEN_EXPIRATION_TIME
       };
+
+      // Add this to the end of the successful registration block in app/context/AuthContext.tsx
+// Find the part after setUser(formattedUser) and localStorage.setItem
+
+// Check badges after registration to ensure they're properly set
+try {
+  const badgeResponse = await fetch("/api/users?action=check_badges", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      userId: formattedUser.id,
+    }),
+  });
+
+  if (badgeResponse.ok) {
+    const badgeData = await badgeResponse.json();
+    
+    if (badgeData.earnedBadges && badgeData.earnedBadges.length > 0) {
+      badgeData.earnedBadges.forEach((badge: { name: any; description: any; }) => {
+        toast({
+          title: "Badge Unlocked!",
+          description: `You've earned the "${badge.name}" badge: ${badge.description}`,
+        });
+      });
+    }
+  }
+} catch (badgeError) {
+  console.error("Error checking badges after registration:", badgeError);
+  // Non-critical error, don't show to user
+}
       
       setUser(formattedUser);
       localStorage.setItem("user", JSON.stringify(formattedUser));

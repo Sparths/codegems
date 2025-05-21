@@ -50,6 +50,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
+import { useSaved } from "@/app/saved/SavedContext";
+import { useAuth } from "@/app/context/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import AuthenticationDialog from "@/components/AuthenticationDialog";
 
 const DiscordIcon = ({ className = "" }) => (
   <svg
@@ -237,12 +241,7 @@ export default function GithubProjectsPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
-  const [savedProjects, setSavedProjects] = useState<string[]>(() => {
-    if (typeof window !== "undefined") {
-      return JSON.parse(localStorage.getItem("savedProjects") || "[]");
-    }
-    return [];
-  });
+  const { savedProjects, addProject, removeProject } = useSaved();
   const [showDiscordDialog, setShowDiscordDialog] = useState(false);
   const [submissionStatus, setSubmissionStatus] = useState<SubmissionStatus>({
     status: "",
@@ -257,12 +256,12 @@ export default function GithubProjectsPage() {
     reason: "",
   });
   const [sortBy, setSortBy] = useState<SortOption>("none");
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
+  
+  const { isAuthenticated } = useAuth();
+  const { toast } = useToast();
 
   const projectsPerPage = 9;
-
-  useEffect(() => {
-    localStorage.setItem("savedProjects", JSON.stringify(savedProjects));
-  }, [savedProjects]);
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -277,6 +276,7 @@ export default function GithubProjectsPage() {
     };
     fetchProjects();
   }, []);
+  
   type SortOption = "none" | "stars" | "forks";
 
   const sortProjects = (projects: Project[], sortBy: SortOption) => {
@@ -297,6 +297,7 @@ export default function GithubProjectsPage() {
       return bValue - aValue;
     });
   };
+  
   const filteredProjects = sortProjects(
     projects.filter(
       (project) =>
@@ -382,12 +383,24 @@ export default function GithubProjectsPage() {
     handleFinalSubmit();
   };
 
-  const addProject = (projectName: string) => {
-    setSavedProjects((prev) => [...prev, projectName]);
-  };
-
-  const removeProject = (projectName: string) => {
-    setSavedProjects((prev) => prev.filter((name) => name !== projectName));
+  const toggleSave = (projectName: string) => {
+    if (!isAuthenticated) {
+      // Show authentication dialog if not logged in
+      toast({
+        title: "Sign in required",
+        description: "You need to be signed in to save projects.",
+        variant: "destructive",
+      });
+      setShowAuthDialog(true);
+      return;
+    }
+    
+    const isSaved = savedProjects.includes(projectName);
+    if (isSaved) {
+      removeProject(projectName);
+    } else {
+      addProject(projectName);
+    }
   };
 
   return (
@@ -470,11 +483,7 @@ export default function GithubProjectsPage() {
                           }`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (isSaved) {
-                              removeProject(project.name);
-                            } else {
-                              addProject(project.name);
-                            }
+                            toggleSave(project.name);
                           }}
                         >
                           {isSaved ? "Unsave" : "Save"}
@@ -764,6 +773,12 @@ export default function GithubProjectsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Authentication Dialog */}
+      <AuthenticationDialog
+        isOpen={showAuthDialog}
+        onOpenChange={setShowAuthDialog}
+      />
     </div>
   );
 }

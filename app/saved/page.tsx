@@ -1,9 +1,10 @@
 'use client';
 
 import { useSaved } from './SavedContext';
+import { useAuth } from '@/app/context/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Star, GitFork, Tag } from 'lucide-react';
+import { Star, GitFork, Tag, LogIn } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   Tooltip,
@@ -11,6 +12,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import AuthenticationDialog from "@/components/AuthenticationDialog";
 import supabase from '@/lib/supabase';
 
 interface Language {
@@ -131,25 +133,25 @@ function getRandomGradient() {
 }
 
 export default function SavedPage() {
-  const { removeProject } = useSaved();
+  const { removeProject, savedProjects, isLoading } = useSaved();
+  const { isAuthenticated } = useAuth();
   const [savedProjectDetails, setSavedProjectDetails] = useState<Project[]>([]);
   const [showWarning, setShowWarning] = useState<boolean>(true);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAuthDialog, setShowAuthDialog] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchSavedProjects = async () => {
-      setIsLoading(true);
+      if (!isAuthenticated) {
+        setSavedProjectDetails([]);
+        return;
+      }
+
       setError(null);
       
       try {
-        // Get saved projects from localStorage
-        const storedProjects = localStorage.getItem('savedProjects');
-        const savedProjectNames: string[] = storedProjects ? JSON.parse(storedProjects) : [];
-
-        if (savedProjectNames.length === 0) {
+        if (savedProjects.length === 0) {
           setSavedProjectDetails([]);
-          setIsLoading(false);
           return;
         }
 
@@ -157,7 +159,7 @@ export default function SavedPage() {
         const { data: allProjects, error } = await supabase
           .from('projects')
           .select('*')
-          .in('name', savedProjectNames);
+          .in('name', savedProjects);
 
         if (error) {
           throw new Error(`Error fetching projects: ${error.message}`);
@@ -173,13 +175,11 @@ export default function SavedPage() {
       } catch (error) {
         console.error('Failed to fetch projects:', error);
         setError('Failed to load saved projects. Please try again later.');
-      } finally {
-        setIsLoading(false);
       }
     };
 
     fetchSavedProjects();
-  }, []); 
+  }, [savedProjects, isAuthenticated]); 
 
   const handleRemove = (projectName: string) => {
     removeProject(projectName);
@@ -187,6 +187,37 @@ export default function SavedPage() {
       prevDetails.filter((project) => project.name !== projectName)
     );
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pt-24 p-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold mb-6 bg-gradient-to-r from-blue-400 to-purple-400 text-transparent bg-clip-text">
+              Saved Projects
+            </h1>
+            <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-8 max-w-xl mx-auto">
+              <p className="text-gray-300 text-lg mb-6">
+                You need to be signed in to save projects. Sign in to your account to save your favorite projects and access them from any device.
+              </p>
+              <Button
+                onClick={() => setShowAuthDialog(true)}
+                className="bg-purple-500 hover:bg-purple-600 text-white"
+              >
+                <LogIn className="mr-2 h-4 w-4" />
+                Sign In to Save Projects
+              </Button>
+              
+              <AuthenticationDialog
+                isOpen={showAuthDialog}
+                onOpenChange={setShowAuthDialog}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -230,23 +261,14 @@ export default function SavedPage() {
             <h1 className="text-4xl font-bold mb-6 bg-gradient-to-r from-blue-400 to-purple-400 text-transparent bg-clip-text">
               Saved Projects
             </h1>
-            {showWarning && (
-              <div className="flex items-center justify-center gap-1">
-                <p className="text-yellow-400/80 text-sm flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide-alert-triangle"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-                  Projects are saved in your browser's local storage and will be deleted if you clear your browser data
-                </p>
-                <button
-                  onClick={() => setShowWarning(false)}
-                  className="ml-1 text-gray-400 hover:text-gray-300 p-1 rounded-full hover:bg-gray-700/50 transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                </button>
-              </div>
-            )}
           </div>
           {savedProjectDetails.length === 0 ? (
-            <p className="text-gray-400 text-center">No projects saved yet.</p>
+            <div className="text-center py-12">
+              <p className="text-gray-400 text-lg">No projects saved yet.</p>
+              <p className="text-gray-400 mt-2">
+                Explore projects and add them to your saved list!
+              </p>
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {savedProjectDetails.map((project, index) => (

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
+import { generateUUID } from "@/lib/utils-uuid";
 
 // GET: Get all ratings or filter by project or user
 export async function GET(request: Request) {
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
       
       // Create new rating
       const newRating = {
-        id: `rating_${Date.now()}`,
+       id: generateUUID(), // Use UUID instead of timestamp
         project_name: projectName,
         user_id: userId,
         rating,
@@ -131,34 +132,63 @@ export async function POST(request: Request) {
 
       console.log("New rating created successfully");
 
-      // Award points for new rating
-      try {
-        const { data: userData, error: getUserError } = await supabase
-          .from('users')
-          .select('points')
-          .eq('id', userId)
-          .single();
+// Replace the badge check portion in app/api/ratings/route.tsx
+// Find the section after successfully creating a rating
 
-        if (getUserError) {
-          console.error("Error getting user data for points:", getUserError);
-        } else if (userData) {
-          const { error: updatePointsError } = await supabase
-            .from('users')
-            .update({
-              points: (userData.points || 0) + 5
-            })
-            .eq('id', userId);
-            
-          if (updatePointsError) {
-            console.error("Error updating user points:", updatePointsError);
-          } else {
-            console.log("User points updated successfully");
-          }
-        }
-      } catch (error) {
-        console.error("Error awarding points:", error);
-        // Continue execution - points award failure shouldn't stop the rating submission
-      }
+// Award points for new rating and check badges
+try {
+  // First update points
+  const { data: userData, error: getUserError } = await supabase
+    .from('users')
+    .select('points')
+    .eq('id', userId)
+    .single();
+
+  if (getUserError) {
+    console.error("Error getting user data for points:", getUserError);
+  } else if (userData) {
+    const { error: updatePointsError } = await supabase
+      .from('users')
+      .update({
+        points: (userData.points || 0) + 5
+      })
+      .eq('id', userId);
+      
+    if (updatePointsError) {
+      console.error("Error updating user points:", updatePointsError);
+    } else {
+      console.log("User points updated successfully");
+    }
+  }
+  
+  // Now check for badges
+  const badgeResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || ''}/api/users?action=check_badges`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      userId: userId,
+    }),
+  });
+
+  if (badgeResponse.ok) {
+    const badgeData = await badgeResponse.json();
+    
+    if (badgeData.earnedBadges && badgeData.earnedBadges.length > 0) {
+      console.log("Badges earned:", badgeData.earnedBadges.map((b: { name: any; }) => b.name).join(", "));
+    }
+    
+    if (badgeData.levelUp) {
+      console.log(`User leveled up to level ${badgeData.currentLevel}`);
+    }
+  } else {
+    console.error("Error checking badges:", await badgeResponse.text());
+  }
+} catch (error) {
+  console.error("Error awarding points/badges:", error);
+  // Continue execution - points/badge award failure shouldn't stop the rating submission
+}
 
       return NextResponse.json({ 
         success: true, 
