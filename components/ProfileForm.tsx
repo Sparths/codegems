@@ -1,106 +1,35 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/app/context/AuthContext";
 import {
-  Card,
   CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Check, AlertCircle } from "lucide-react";
-
-interface FormData {
-  username: string;
-  displayName: string;
-  currentPassword: string;
-  newPassword: string;
-  confirmPassword: string;
-  email: string;
-}
 
 const ProfileForm = () => {
   const { user, updateUser, isLoading } = useAuth();
-  const [formData, setFormData] = useState<FormData>({
-    username: user?.username || "",
-    displayName: user?.displayName || "",
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-    email: user?.email || "",
-  });
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [formSuccess, setFormSuccess] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [formSuccess, setFormSuccess] = useState<string | null>(null);
 
   // Update form data when user changes
   useEffect(() => {
     if (user) {
-      setFormData(prev => ({
-        ...prev,
-        username: user.username,
-        displayName: user.displayName,
-        email: user.email || "",
-      }));
+      setDisplayName(user.displayName || "");
     }
   }, [user]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear error for this field when value changes
-    if (formErrors[name]) {
-      setFormErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
-    }
-  };
-
   const validateForm = () => {
-    const errors: Record<string, string> = {};
-    
-    // Validate username
-    if (!formData.username.trim()) {
-      errors.username = "Username is required";
-    } else if (formData.username.length < 3) {
-      errors.username = "Username must be at least 3 characters";
+    if (!displayName.trim()) {
+      setFormError("Display name is required");
+      return false;
     }
     
-    // Validate display name
-    if (!formData.displayName.trim()) {
-      errors.displayName = "Display name is required";
-    }
-    
-    // Validate email
-    if (formData.email && !/\S+@\S+\.\S+/.test(formData.email)) {
-      errors.email = "Invalid email format";
-    }
-    
-    // If changing password, validate password fields
-    if (formData.currentPassword || formData.newPassword || formData.confirmPassword) {
-      if (!formData.currentPassword) {
-        errors.currentPassword = "Current password is required to change password";
-      }
-      
-      if (!formData.newPassword) {
-        errors.newPassword = "New password is required";
-      } else if (formData.newPassword.length < 6) {
-        errors.newPassword = "Password must be at least 6 characters";
-      }
-      
-      if (formData.newPassword !== formData.confirmPassword) {
-        errors.confirmPassword = "Passwords don't match";
-      }
-    }
-    
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    setFormError(null);
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -110,35 +39,15 @@ const ProfileForm = () => {
     
     if (!validateForm()) return;
     
-    // Prepare update data
-    const updateData: any = {
-      username: formData.username,
-      displayName: formData.displayName,
-      email: formData.email,
-    };
-    
-    // Add password data if changing password
-    if (formData.currentPassword && formData.newPassword) {
-      Object.assign(updateData, {
-        currentPassword: formData.currentPassword,
-        newPassword: formData.newPassword
-      });
-    }
-    
     try {
-      const success = await updateUser(updateData);
+      const success = await updateUser({
+        displayName: displayName
+      });
       
       if (success) {
         setFormSuccess("Profile updated successfully");
-        // Reset password fields
-        setFormData(prev => ({
-          ...prev,
-          currentPassword: "",
-          newPassword: "",
-          confirmPassword: ""
-        }));
       } else {
-        setFormError("Failed to update profile. Please check your inputs and try again.");
+        setFormError("Failed to update profile. Please try again.");
       }
     } catch (error) {
       setFormError("An unexpected error occurred. Please try again later.");
@@ -167,113 +76,17 @@ const ProfileForm = () => {
       )}
     
       <div className="space-y-2">
-        <Label htmlFor="username" className="text-white">
-          Username
-        </Label>
-        <Input
-          id="username"
-          name="username"
-          value={formData.username}
-          onChange={handleInputChange}
-          placeholder="Your username"
-          className="bg-slate-700 border-slate-600 text-white"
-        />
-        {formErrors.username && (
-          <p className="text-red-400 text-sm">{formErrors.username}</p>
-        )}
-      </div>
-      
-      <div className="space-y-2">
         <Label htmlFor="displayName" className="text-white">
           Display Name
         </Label>
         <Input
           id="displayName"
           name="displayName"
-          value={formData.displayName}
-          onChange={handleInputChange}
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
           placeholder="Your display name"
           className="bg-slate-700 border-slate-600 text-white"
         />
-        {formErrors.displayName && (
-          <p className="text-red-400 text-sm">{formErrors.displayName}</p>
-        )}
-      </div>
-      
-      <div className="space-y-2">
-        <Label htmlFor="email" className="text-white">
-          Email
-        </Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          value={formData.email}
-          onChange={handleInputChange}
-          placeholder="Your email address"
-          className="bg-slate-700 border-slate-600 text-white"
-        />
-        {formErrors.email && (
-          <p className="text-red-400 text-sm">{formErrors.email}</p>
-        )}
-      </div>
-      
-      <div className="pt-4 border-t border-slate-700">
-        <h3 className="text-white font-medium mb-2">Change Password</h3>
-        
-        <div className="space-y-2">
-          <Label htmlFor="currentPassword" className="text-white">
-            Current Password
-          </Label>
-          <Input
-            id="currentPassword"
-            name="currentPassword"
-            type="password"
-            value={formData.currentPassword}
-            onChange={handleInputChange}
-            placeholder="Enter your current password"
-            className="bg-slate-700 border-slate-600 text-white"
-          />
-          {formErrors.currentPassword && (
-            <p className="text-red-400 text-sm">{formErrors.currentPassword}</p>
-          )}
-        </div>
-        
-        <div className="space-y-2 mt-2">
-          <Label htmlFor="newPassword" className="text-white">
-            New Password
-          </Label>
-          <Input
-            id="newPassword"
-            name="newPassword"
-            type="password"
-            value={formData.newPassword}
-            onChange={handleInputChange}
-            placeholder="Enter your new password"
-            className="bg-slate-700 border-slate-600 text-white"
-          />
-          {formErrors.newPassword && (
-            <p className="text-red-400 text-sm">{formErrors.newPassword}</p>
-          )}
-        </div>
-        
-        <div className="space-y-2 mt-2">
-          <Label htmlFor="confirmPassword" className="text-white">
-            Confirm New Password
-          </Label>
-          <Input
-            id="confirmPassword"
-            name="confirmPassword"
-            type="password"
-            value={formData.confirmPassword}
-            onChange={handleInputChange}
-            placeholder="Confirm your new password"
-            className="bg-slate-700 border-slate-600 text-white"
-          />
-          {formErrors.confirmPassword && (
-            <p className="text-red-400 text-sm">{formErrors.confirmPassword}</p>
-          )}
-        </div>
       </div>
       
       <div className="pt-4">

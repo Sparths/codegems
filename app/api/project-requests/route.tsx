@@ -13,7 +13,6 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const adminSupabase = supabaseServiceKey ? 
   createClient(supabaseUrl, supabaseServiceKey) : 
   supabase; // Fallback to regular client if no service key
-
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -54,11 +53,33 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. Store in Supabase
+    // Check if user exists in the database
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', userId)
+      .single();
+
+    if (userError) {
+      console.error("Error checking user:", userError);
+      return NextResponse.json(
+        { error: "Failed to verify user" },
+        { status: 500 }
+      );
+    }
+
+    if (!userData) {
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    // 1. Store in Supabase - use adminSupabase to bypass RLS
     const requestId = generateUUID();
     const now = new Date().toISOString();
     
-    const { error: insertError } = await supabase
+    const { error: insertError } = await adminSupabase  // Use admin client to bypass RLS
       .from('project_requests')
       .insert({
         id: requestId,
@@ -74,7 +95,7 @@ export async function POST(request: Request) {
     if (insertError) {
       console.error("Error storing project request:", insertError);
       return NextResponse.json(
-        { error: "Failed to store project request" },
+        { error: `Failed to store project request: ${insertError.message}` },
         { status: 500 }
       );
     }

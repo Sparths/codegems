@@ -74,54 +74,65 @@ const RequestPage = () => {
     setShowDiscordDialog(true);
   };
 
-  const handleFinalSubmit = async () => {
-    if (!isAuthenticated || !user) {
-      setShowAuthDialog(true);
-      return;
+// In requestpage.tsx, in handleFinalSubmit, ensure the userId is correctly passed:
+
+const handleFinalSubmit = async () => {
+  if (!isAuthenticated || !user) {
+    setShowAuthDialog(true);
+    return;
+  }
+
+  try {
+    setSubmissionStatus({
+      status: "loading",
+      message: "Submitting your request...",
+    });
+
+    console.log("Submitting project with user ID:", user.id); // Add this for debugging
+
+    const response = await fetch("/api/project-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: projectRequest.title,
+        githubLink: projectRequest.githubLink,
+        description: projectRequest.description,
+        reason: projectRequest.reason,
+        userId: user.id,  // Make sure this is correct
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to submit request");
     }
 
-    try {
-      setSubmissionStatus({ status: 'loading', message: 'Submitting your request...' });
+    const data = await response.json();
 
-      const response = await fetch('/api/project-requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...projectRequest,
-          // Make sure user ID is properly formatted if needed
-          userId: user.id.toString() // Convert to string if it's a UUID
-        }),
-      });
+    setSubmissionStatus({
+      status: "success",
+      message: "Thank you for your submission! Your project request has been received and will be reviewed by our team. You can check the status in your profile."
+    });
 
-      if (!response.ok) throw new Error('Failed to submit request');
+    setProjectRequest({
+      title: "",
+      githubLink: "",
+      description: "",
+      reason: ""
+    });
 
-      const data = await response.json();
-
-      setSubmissionStatus({
-        status: 'success',
-        message: 'Thank you for your submission! Your project request has been received and will be reviewed by our team. You can check the status in your profile.'
-      });
-
-      setProjectRequest({
-        title: '',
-        githubLink: '',
-        description: '',
-        reason: ''
-      });
-
-      // Redirect to the profile page after a short delay
-      setTimeout(() => {
-        router.push('/profile?tab=my-requests');
-      }, 3000);
-
-    } catch (error) {
-      setSubmissionStatus({
-        status: 'error',
-        message: 'Failed to submit project request. Please try again.'
-      });
-      console.error('Error submitting project request:', error);
-    }
-  };
+    // Redirect to the profile page after a short delay
+    setTimeout(() => {
+      router.push('/profile?tab=my-requests');
+    }, 3000);
+  } catch (error) {
+    setSubmissionStatus({
+      status: "error",
+      message: "Failed to submit project request. Please try again."
+    });
+    console.error("Error submitting project request:", error);
+  }
+};
 
   const handleDiscordJoin = () => {
     window.open('https://discord.gg/QtnFGDQj5S', '_blank');
