@@ -115,7 +115,7 @@ const BadgeDisplay: React.FC<BadgeDisplayProps> = ({
   // Filter badges based on showUnearned
   const badgesToDisplay = showUnearned
     ? badges
-    : badges.filter((badge) => userBadges.includes(badge.id));
+    : badges.filter((badge) => userBadges.includes(badge.name));
 
   if (badgesToDisplay.length === 0) {
     return (
@@ -129,10 +129,10 @@ const BadgeDisplay: React.FC<BadgeDisplayProps> = ({
     <div className="flex flex-wrap gap-2">
       <TooltipProvider>
         {badgesToDisplay.map((badge) => {
-          const isEarned = userBadges.includes(badge.id);
+          const isEarned = userBadges.includes(badge.name);
 
           return (
-            <Tooltip key={badge.id} delayDuration={300}>
+            <Tooltip key={badge.name} delayDuration={300}>
               <TooltipTrigger asChild>
                 <div
                   className={`

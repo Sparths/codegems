@@ -206,7 +206,7 @@ export async function createUser(request: Request) {
       .toString("hex");
 
     // Ensure the newcomer badge is added
-    const badges = ["newcomer"];
+    const badges = ["Newcomer"];
     
     const newUser = {
       id: `user_${Date.now()}`,
@@ -546,14 +546,13 @@ export async function checkBadges(request: Request) {
     console.log(`Current points: ${currentPoints}`);
     let pointsEarned = 0;
 
-    // Ensure the newcomer badge is awarded
-    const newcomerBadge = badges.find(b => b.id === "newcomer");
-    if (!userBadges.includes("newcomer") && newcomerBadge) {
-      console.log("Awarding newcomer badge");
-      earnedBadges.push(newcomerBadge);
-      userBadges.push("newcomer");
-      pointsEarned += newcomerBadge.points;
-    }
+const newcomerBadge = badges.find(b => b.name === "Newcomer");
+if (!userBadges.includes(newcomerBadge?.name) && newcomerBadge) {
+  console.log("Awarding newcomer badge with ID:", newcomerBadge.name);
+  earnedBadges.push(newcomerBadge);
+  userBadges.push(newcomerBadge.name);
+  pointsEarned += newcomerBadge.points;
+}
 
     // Check ratings count
     const { data: ratings, error: ratingsError } = await supabase
@@ -566,7 +565,7 @@ export async function checkBadges(request: Request) {
       console.log(`User has ${ratingsCount} ratings`);
 
       // First rating badge
-      const firstRatingBadge = badges.find(b => b.id === "first_rating");
+      const firstRatingBadge = badges.find(b => b.name === "first_rating");
       if (ratingsCount > 0 && !userBadges.includes("first_rating") && firstRatingBadge) {
         console.log("Awarding first_rating badge");
         earnedBadges.push(firstRatingBadge);
@@ -575,7 +574,7 @@ export async function checkBadges(request: Request) {
       }
 
       // 10 ratings badge
-      const rating10Badge = badges.find(b => b.id === "rating_10");
+      const rating10Badge = badges.find(b => b.name === "rating_10");
       if (ratingsCount >= 10 && !userBadges.includes("rating_10") && rating10Badge) {
         console.log("Awarding rating_10 badge");
         earnedBadges.push(rating10Badge);
@@ -597,7 +596,7 @@ export async function checkBadges(request: Request) {
       console.log(`User has ${commentsCount} comments`);
 
       // First comment badge
-      const firstCommentBadge = badges.find(b => b.id === "first_comment");
+      const firstCommentBadge = badges.find(b => b.name === "first_comment");
       if (commentsCount > 0 && !userBadges.includes("first_comment") && firstCommentBadge) {
         console.log("Awarding first_comment badge");
         earnedBadges.push(firstCommentBadge);
@@ -606,7 +605,7 @@ export async function checkBadges(request: Request) {
       }
 
       // 10 comments badge
-      const comment10Badge = badges.find(b => b.id === "comment_10");
+      const comment10Badge = badges.find(b => b.name === "comment_10");
       if (commentsCount >= 10 && !userBadges.includes("comment_10") && comment10Badge) {
         console.log("Awarding comment_10 badge");
         earnedBadges.push(comment10Badge);
@@ -625,7 +624,7 @@ export async function checkBadges(request: Request) {
     
     // Check for level badges
     if (newLevel >= 5 && !userBadges.includes("level_5")) {
-      const level5Badge = badges.find(b => b.id === "level_5");
+      const level5Badge = badges.find(b => b.name === "level_5");
       if (level5Badge) {
         console.log("Awarding level_5 badge");
         earnedBadges.push(level5Badge);
@@ -635,7 +634,7 @@ export async function checkBadges(request: Request) {
     }
 
     if (newLevel >= 10 && !userBadges.includes("level_10")) {
-      const level10Badge = badges.find(b => b.id === "level_10");
+      const level10Badge = badges.find(b => b.name === "level_10");
       if (level10Badge) {
         console.log("Awarding level_10 badge");
         earnedBadges.push(level10Badge);

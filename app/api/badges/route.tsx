@@ -5,7 +5,7 @@ import supabase from "@/lib/supabase";
 const defaultBadges = [
   {
     id: "newcomer",
-    name: "Newcomer",
+    name: "Newcomer", // This will be used for lookups instead of id
     description: "Create an account",
     icon: "Gift",
     points: 10,
@@ -64,7 +64,7 @@ const defaultBadges = [
 // GET: Get all badges or a specific badge
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const badgeId = searchParams.get("id");
+  const badgeName = searchParams.get("name"); // Changed from badgeId to badgeName
 
   try {
     // Check if badges table is empty
@@ -87,12 +87,12 @@ export async function GET(request: Request) {
       }
     }
 
-    if (badgeId) {
-      // Get a specific badge
+    if (badgeName) {
+      // Get a specific badge by name instead of id
       const { data: badge, error } = await supabase
         .from('badges')
         .select('*')
-        .eq('id', badgeId)
+        .eq('name', badgeName) // Changed from 'id' to 'name'
         .single();
       
       if (error || !badge) {
@@ -137,16 +137,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if badge with this ID already exists
+    // Check if badge with this name already exists (changed from ID)
     const { data: existingBadge } = await supabase
       .from('badges')
-      .select('id')
-      .eq('id', id)
+      .select('name')
+      .eq('name', name) // Changed from 'id' to 'name'
       .single();
 
     if (existingBadge) {
       return NextResponse.json(
-        { error: "Badge with this ID already exists" },
+        { error: "Badge with this name already exists" }, // Updated error message
         { status: 400 }
       );
     }
@@ -185,18 +185,18 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const { id, name, description, icon, points } = body;
 
-    if (!id) {
+    if (!name) { // Changed from requiring id to requiring name
       return NextResponse.json(
-        { error: "Badge ID is required" },
+        { error: "Badge name is required" },
         { status: 400 }
       );
     }
 
-    // Check if badge exists
+    // Check if badge exists by name
     const { data: existingBadge, error: getError } = await supabase
       .from('badges')
-      .select('id')
-      .eq('id', id)
+      .select('*')
+      .eq('name', name) // Changed from 'id' to 'name'
       .single();
 
     if (getError || !existingBadge) {
@@ -205,16 +205,16 @@ export async function PUT(request: Request) {
 
     // Prepare update object
     const updates: Record<string, any> = {};
-    if (name) updates.name = name;
+    if (id) updates.id = id; // Now id can be updated
     if (description) updates.description = description;
     if (icon) updates.icon = icon;
     if (points) updates.points = points;
 
-    // Update badge
+    // Update badge by name instead of id
     const { error: updateError } = await supabase
       .from('badges')
       .update(updates)
-      .eq('id', id);
+      .eq('name', name); // Changed from 'id' to 'name'
 
     if (updateError) {
       return NextResponse.json(
@@ -236,11 +236,11 @@ export async function PUT(request: Request) {
 // DELETE: Remove a badge
 export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
-  const badgeId = searchParams.get("id");
+  const badgeName = searchParams.get("name"); // Changed from badgeId to badgeName
 
-  if (!badgeId) {
+  if (!badgeName) {
     return NextResponse.json(
-      { error: "Badge ID is required" },
+      { error: "Badge name is required" }, // Updated error message
       { status: 400 }
     );
   }
@@ -249,7 +249,7 @@ export async function DELETE(request: Request) {
     const { error } = await supabase
       .from('badges')
       .delete()
-      .eq('id', badgeId);
+      .eq('name', badgeName); // Changed from 'id' to 'name'
 
     if (error) {
       return NextResponse.json(
