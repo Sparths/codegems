@@ -3,6 +3,44 @@ import { createClient } from '@supabase/supabase-js';
 export type Database = {
   public: {
     Tables: {
+      project_requests: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          github_link: string
+          description: string
+          reason: string
+          status: 'pending' | 'accepted' | 'declined'
+          created_at: string
+          updated_at: string | null
+          admin_notes: string | null
+        }
+        Insert: {
+          id: string
+          user_id: string
+          title: string
+          github_link: string
+          description: string
+          reason: string
+          status?: 'pending' | 'accepted' | 'declined'
+          created_at?: string
+          updated_at?: string | null
+          admin_notes?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          github_link?: string
+          description?: string
+          reason?: string
+          status?: 'pending' | 'accepted' | 'declined'
+          created_at?: string
+          updated_at?: string | null
+          admin_notes?: string | null
+        }
+      }
       users: {
         Row: {
           id: string

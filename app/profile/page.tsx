@@ -1,3 +1,4 @@
+// app/profile/page.tsx with project request tab
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -11,12 +12,11 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BadgeDisplay from "@/components/BadgeDisplay";
 import AuthenticationDialog from "@/components/AuthenticationDialog";
-import { useRouter } from "next/navigation";
+import UserProjectRequests from "@/components/UserProjectRequests";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Award,
   Star,
@@ -25,10 +25,10 @@ import {
   User,
   Mail,
   Camera,
-  Check,
-  AlertCircle
+  Settings,
+  FileText,
 } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import ProfileForm from "@/components/ProfileForm";
 
 interface ProfileStats {
   ratings: number;
@@ -37,34 +37,27 @@ interface ProfileStats {
 }
 
 const UserProfile = () => {
-  const { user, isAuthenticated, updateUser } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
 
-  const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmNewPassword, setConfirmNewPassword] = useState("");
-  const [isUpdating, setIsUpdating] = useState(false);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
-  const [updateMessage, setUpdateMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
   const [stats, setStats] = useState<ProfileStats>({
     ratings: 0,
     comments: 0,
     submissions: 0,
   });
+  const [activeTab, setActiveTab] = useState<string>("profile");
 
   useEffect(() => {
     if (!isAuthenticated) {
       setShowAuthDialog(true);
     } else if (user) {
-      setDisplayName(user.displayName);
-      setEmail(user.email || "");
-      setAvatarUrl(user.avatarUrl);
+      // Set active tab from URL parameter if present
+      if (tabParam && ['profile', 'my-requests'].includes(tabParam)) {
+        setActiveTab(tabParam);
+      }
 
       // Fetch user stats
       const fetchStats = async () => {
@@ -80,7 +73,7 @@ const UserProfile = () => {
           setStats({
             ratings: ratings.length,
             comments: comments.length,
-            submissions: 0, // TODO: Implement project submissions count
+            submissions: 0, // Will be updated when we fetch project requests
           });
         } catch (error) {
           console.error("Error fetching user stats:", error);
@@ -89,113 +82,7 @@ const UserProfile = () => {
 
       fetchStats();
     }
-  }, [isAuthenticated, user]);
-
-  const handleProfileUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setUpdateMessage(null);
-
-    if (!user) return;
-
-    try {
-      setIsUpdating(true);
-
-      const updateData: any = {
-        displayName,
-      };
-
-      // Only include email if it's changed
-      if (email && email !== user.email) {
-        updateData.email = email;
-      }
-
-      // Only include avatar if it's changed
-      if (avatarUrl && avatarUrl !== user.avatarUrl) {
-        updateData.avatarUrl = avatarUrl;
-      }
-
-      const success = await updateUser(updateData);
-
-      if (success) {
-        setUpdateMessage({
-          type: "success",
-          text: "Your profile has been successfully updated.",
-        });
-      }
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      setUpdateMessage({
-        type: "error",
-        text: "Error updating profile.",
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handlePasswordUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setUpdateMessage(null);
-
-    if (!user) return;
-
-    if (newPassword !== confirmNewPassword) {
-      setUpdateMessage({
-        type: "error",
-        text: "New passwords don't match.",
-      });
-      return;
-    }
-
-    try {
-      setIsUpdating(true);
-
-      // Send password change directly to API
-      const response = await fetch("/api/users", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: user.id,
-          currentPassword,
-          newPassword,
-        }),
-      });
-
-      if (response.ok) {
-        setUpdateMessage({
-          type: "success",
-          text: "Your password has been successfully updated.",
-        });
-
-        // Clear password fields
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmNewPassword("");
-      } else {
-        const errorData = await response.json();
-        setUpdateMessage({
-          type: "error",
-          text: errorData.error || "Error updating password.",
-        });
-      }
-    } catch (error) {
-      console.error("Error updating password:", error);
-      setUpdateMessage({
-        type: "error",
-        text: "Error updating password.",
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleAvatarChange = () => {
-    // For simplicity, we're just using a random avatar from DiceBear
-    const newSeed = Math.random().toString(36).substring(2, 8);
-    setAvatarUrl(`https://api.dicebear.com/7.x/bottts/svg?seed=${newSeed}`);
-  };
+  }, [isAuthenticated, user, tabParam]);
 
   if (!isAuthenticated) {
     return (
@@ -252,9 +139,9 @@ const UserProfile = () => {
                 <CardContent className="space-y-4">
                   <div className="flex flex-col items-center">
                     <div className="relative mb-3">
-                      {avatarUrl ? (
+                      {user.avatarUrl ? (
                         <img
-                          src={avatarUrl}
+                          src={user.avatarUrl}
                           alt={user.displayName}
                           className="w-24 h-24 rounded-full"
                         />
@@ -263,12 +150,6 @@ const UserProfile = () => {
                           <User className="h-12 w-12 text-slate-400" />
                         </div>
                       )}
-                      <button
-                        onClick={handleAvatarChange}
-                        className="absolute bottom-0 right-0 w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center"
-                      >
-                        <Camera className="w-4 h-4 text-white" />
-                      </button>
                     </div>
 
                     <div className="flex items-center gap-2 mb-1">
@@ -308,7 +189,7 @@ const UserProfile = () => {
 
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
-                        <TrendingUp className="text-green-500 w-4 h-4" />
+                        <FileText className="text-green-500 w-4 h-4" />
                         <span className="text-sm">Submissions</span>
                       </div>
                       <span className="font-semibold">{stats.submissions}</span>
@@ -340,190 +221,40 @@ const UserProfile = () => {
             <div className="lg:col-span-3">
               <Card className="bg-slate-800/50 border-slate-700 text-white">
                 <CardHeader>
-                  <CardTitle>Profile Settings</CardTitle>
-                  <CardDescription className="text-gray-400">
-                    Update your personal information
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Tabs defaultValue="profile" className="w-full">
+                  <Tabs 
+                    defaultValue={activeTab} 
+                    value={activeTab} 
+                    onValueChange={(value) => {
+                      setActiveTab(value);
+                      router.push(`/profile?tab=${value}`);
+                    }}
+                  >
                     <TabsList className="bg-slate-700 w-full grid grid-cols-2">
                       <TabsTrigger
                         value="profile"
                         className="data-[state=active]:bg-slate-900"
                       >
-                        Profile
+                        <Settings className="h-4 w-4 mr-2" />
+                        Profile Settings
                       </TabsTrigger>
                       <TabsTrigger
-                        value="security"
+                        value="my-requests"
                         className="data-[state=active]:bg-slate-900"
                       >
-                        Security
+                        <FileText className="h-4 w-4 mr-2" />
+                        My Project Requests
                       </TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="profile" className="pt-6">
-                      {updateMessage && (
-                        <Alert
-                          className={`${
-                            updateMessage.type === "success"
-                              ? "bg-green-500/20 border-green-500"
-                              : "bg-red-500/20 border-red-500"
-                          } mb-6`}
-                        >
-                          {updateMessage.type === "success" ? (
-                            <Check className="h-4 w-4" />
-                          ) : (
-                            <AlertCircle className="h-4 w-4" />
-                          )}
-                          <AlertTitle>
-                            {updateMessage.type === "success"
-                              ? "Success!"
-                              : "Error"}
-                          </AlertTitle>
-                          <AlertDescription>
-                            {updateMessage.text}
-                          </AlertDescription>
-                        </Alert>
-                      )}
-
-                      <form
-                        onSubmit={handleProfileUpdate}
-                        className="space-y-4"
-                      >
-                        <div className="space-y-2">
-                          <Label htmlFor="displayName">Display Name</Label>
-                          <Input
-                            id="displayName"
-                            value={displayName}
-                            onChange={(e) => setDisplayName(e.target.value)}
-                            placeholder="Display name"
-                            className="bg-slate-700 border-slate-600 text-white"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="email">Email</Label>
-                          <Input
-                            id="email"
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="Email address"
-                            className="bg-slate-700 border-slate-600 text-white"
-                          />
-                        </div>
-
-                        <div className="pt-4">
-                          <Button
-                            type="submit"
-                            className="bg-purple-500 hover:bg-purple-600 text-white"
-                            disabled={isUpdating}
-                          >
-                            {isUpdating ? (
-                              <span className="flex items-center gap-2">
-                                <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                                Updating...
-                              </span>
-                            ) : (
-                              "Update Profile"
-                            )}
-                          </Button>
-                        </div>
-                      </form>
+                      <ProfileForm />
                     </TabsContent>
 
-                    <TabsContent value="security" className="pt-6">
-                      {updateMessage && (
-                        <Alert
-                          className={`${
-                            updateMessage.type === "success"
-                              ? "bg-green-500/20 border-green-500"
-                              : "bg-red-500/20 border-red-500"
-                          } mb-6`}
-                        >
-                          {updateMessage.type === "success" ? (
-                            <Check className="h-4 w-4" />
-                          ) : (
-                            <AlertCircle className="h-4 w-4" />
-                          )}
-                          <AlertTitle>
-                            {updateMessage.type === "success"
-                              ? "Success!"
-                              : "Error"}
-                          </AlertTitle>
-                          <AlertDescription>
-                            {updateMessage.text}
-                          </AlertDescription>
-                        </Alert>
-                      )}
-
-                      <form
-                        onSubmit={handlePasswordUpdate}
-                        className="space-y-4"
-                      >
-                        <div className="space-y-2">
-                          <Label htmlFor="currentPassword">
-                            Current Password
-                          </Label>
-                          <Input
-                            id="currentPassword"
-                            type="password"
-                            value={currentPassword}
-                            onChange={(e) => setCurrentPassword(e.target.value)}
-                            placeholder="Your current password"
-                            className="bg-slate-700 border-slate-600 text-white"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="newPassword">New Password</Label>
-                          <Input
-                            id="newPassword"
-                            type="password"
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            placeholder="New password"
-                            className="bg-slate-700 border-slate-600 text-white"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="confirmNewPassword">
-                            Confirm New Password
-                          </Label>
-                          <Input
-                            id="confirmNewPassword"
-                            type="password"
-                            value={confirmNewPassword}
-                            onChange={(e) =>
-                              setConfirmNewPassword(e.target.value)
-                            }
-                            placeholder="Confirm new password"
-                            className="bg-slate-700 border-slate-600 text-white"
-                          />
-                        </div>
-
-                        <div className="pt-4">
-                          <Button
-                            type="submit"
-                            className="bg-purple-500 hover:bg-purple-600 text-white"
-                            disabled={isUpdating}
-                          >
-                            {isUpdating ? (
-                              <span className="flex items-center gap-2">
-                                <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                                Updating...
-                              </span>
-                            ) : (
-                              "Change Password"
-                            )}
-                          </Button>
-                        </div>
-                      </form>
+                    <TabsContent value="my-requests" className="pt-6">
+                      <UserProjectRequests />
                     </TabsContent>
                   </Tabs>
-                </CardContent>
+                </CardHeader>
               </Card>
             </div>
           </div>

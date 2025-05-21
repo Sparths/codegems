@@ -1,3 +1,4 @@
+// components/Navbar.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -14,6 +15,8 @@ import {
   Trophy,
   Award,
   LogOut,
+  ShieldAlert,
+  FileText
 } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 import AuthenticationDialog from "@/components/AuthenticationDialog";
@@ -25,6 +28,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+// Define owner ID - replace with your actual owner user ID
+const OWNER_ID = "Sparths";
 
 interface NavLinkProps {
   icon: React.ElementType;
@@ -65,6 +71,9 @@ const Navbar = () => {
   const [showAuthDialog, setShowAuthDialog] = useState(false);
 
   const { user, isAuthenticated, logout } = useAuth();
+  
+  // Check if user is the owner
+  const isOwner = user && (user.id === OWNER_ID || user.username === OWNER_ID);
 
   useEffect(() => {
     setActiveNav(pathname);
@@ -91,8 +100,13 @@ const Navbar = () => {
               activeNav={activeNav}
               setActiveNav={setActiveNav}
             />
-            <NavLink icon={Bookmark} text="Saved" href="/saved" activeNav={activeNav} setActiveNav={setActiveNav} />
-
+            <NavLink
+              icon={Bookmark}
+              text="Saved"
+              href="/saved"
+              activeNav={activeNav}
+              setActiveNav={setActiveNav}
+            />
             <NavLink
               icon={Send}
               text="Suggest Project"
@@ -107,6 +121,16 @@ const Navbar = () => {
               activeNav={activeNav}
               setActiveNav={setActiveNav}
             />
+            
+            {isOwner && (
+              <NavLink
+                icon={ShieldAlert}
+                text="Admin"
+                href="/admin/project-requests"
+                activeNav={activeNav}
+                setActiveNav={setActiveNav}
+              />
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -151,12 +175,29 @@ const Navbar = () => {
                       <span>Profile</span>
                     </DropdownMenuItem>
                   </Link>
+                  <Link href="/profile?tab=my-requests">
+                    <DropdownMenuItem className="cursor-pointer hover:bg-slate-700">
+                      <FileText className="mr-2 h-4 w-4" />
+                      <span>My Project Requests</span>
+                    </DropdownMenuItem>
+                  </Link>
                   <Link href="/badges">
                     <DropdownMenuItem className="cursor-pointer hover:bg-slate-700">
                       <Award className="mr-2 h-4 w-4" />
                       <span>Badges</span>
                     </DropdownMenuItem>
                   </Link>
+                  {isOwner && (
+                    <>
+                      <DropdownMenuSeparator className="bg-slate-700" />
+                      <Link href="/admin/project-requests">
+                        <DropdownMenuItem className="cursor-pointer hover:bg-slate-700">
+                          <ShieldAlert className="mr-2 h-4 w-4 text-purple-400" />
+                          <span>Admin Panel</span>
+                        </DropdownMenuItem>
+                      </Link>
+                    </>
+                  )}
                   <DropdownMenuSeparator className="bg-slate-700" />
                   <DropdownMenuItem
                     onClick={logout}
@@ -235,12 +276,28 @@ const Navbar = () => {
                 setActiveNav={setActiveNav}
               />
               <NavLink
+                icon={FileText}
+                text="My Project Requests"
+                href="/profile?tab=my-requests"
+                activeNav={activeNav}
+                setActiveNav={setActiveNav}
+              />
+              <NavLink
                 icon={Award}
                 text="Badges"
                 href="/badges"
                 activeNav={activeNav}
                 setActiveNav={setActiveNav}
               />
+              {isOwner && (
+                <NavLink
+                  icon={ShieldAlert}
+                  text="Admin Panel"
+                  href="/admin/project-requests"
+                  activeNav={activeNav}
+                  setActiveNav={setActiveNav}
+                />
+              )}
               <div
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-red-400 hover:text-red-300 cursor-pointer"
                 onClick={logout}
