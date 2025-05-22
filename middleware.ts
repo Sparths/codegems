@@ -7,12 +7,12 @@ const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 
 // Rate limiting configuration
 const RATE_LIMIT_CONFIG = {
-  '/api/auth': { maxRequests: 50, windowMs: 1 * 60 * 1000 }, // 5 requests per 15 minutes
-  '/api/project-requests': { maxRequests: 50, windowMs: 1 * 60 * 1000 }, // 3 requests per hour
-  '/api/comments': { maxRequests: 50, windowMs: 1 * 60 * 1000 }, // 10 requests per 5 minutes
-  '/api/ratings': { maxRequests: 50, windowMs: 1 * 60 * 1000 }, // 20 requests per hour
-  '/api/users': { maxRequests: 50, windowMs: 1 * 60 * 1000 }, // 10 requests per 15 minutes
-  'default': { maxRequests: 50, windowMs: 1 * 60 * 1000 } // Default rate limit
+  '/api/auth': { maxRequests: 500, windowMs: 1 * 60 * 1000 }, // 5 requests per 15 minutes
+  '/api/project-requests': { maxRequests: 500, windowMs: 1 * 60 * 1000 }, // 3 requests per hour
+  '/api/comments': { maxRequests: 500, windowMs: 1 * 60 * 1000 }, // 10 requests per 5 minutes
+  '/api/ratings': { maxRequests: 500, windowMs: 1 * 60 * 1000 }, // 20 requests per hour
+  '/api/users': { maxRequests: 500, windowMs: 1 * 60 * 1000 }, // 10 requests per 15 minutes
+  'default': { maxRequests: 500, windowMs: 1 * 60 * 1000 } // Default rate limit
 };
 
 function getClientIP(request: NextRequest): string {
