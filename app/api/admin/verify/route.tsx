@@ -9,12 +9,15 @@ const adminSupabase = supabaseServiceKey ?
   createClient(supabaseUrl, supabaseServiceKey) : 
   null;
 
-// List of authorized admin user IDs and usernames
-const AUTHORIZED_ADMINS = [
-  'f8adc96a-496f-412b-af15-20bd3cd66b3c', // Original admin ID
-  'Sparths', // Admin username
-  'sparths', // Lowercase version
-];
+// Get admin list from environment variables
+const getAuthorizedAdmins = (): string[] => {
+  const adminList = process.env.AUTHORIZED_ADMINS;
+  if (!adminList) {
+    console.error('AUTHORIZED_ADMINS environment variable not set');
+    return [];
+  }
+  return adminList.split(',').map(admin => admin.trim());
+};
 
 // Input sanitization
 const sanitizeInput = (input: string): string => {
@@ -36,9 +39,17 @@ export async function POST(request: Request) {
     }
 
     const sanitizedUserId = sanitizeInput(userId);
+    const authorizedAdmins = getAuthorizedAdmins();
+
+    if (authorizedAdmins.length === 0) {
+      return NextResponse.json(
+        { error: "Admin configuration error" },
+        { status: 500 }
+      );
+    }
 
     // First check if user ID is directly in the authorized list
-    if (AUTHORIZED_ADMINS.includes(sanitizedUserId)) {
+    if (authorizedAdmins.includes(sanitizedUserId)) {
       console.log("User found in direct admin list:", sanitizedUserId);
       
       // Create admin session token for subsequent requests
@@ -55,7 +66,7 @@ export async function POST(request: Request) {
         success: true,
         isAdmin: true,
         userId: sanitizedUserId,
-        adminToken: adminToken // Return this token for subsequent admin API calls
+        adminToken: adminToken
       });
     }
 
@@ -89,10 +100,10 @@ export async function POST(request: Request) {
         console.log("Found user in database:", user);
 
         // Check if user ID, username, or display_name is in admin list
-        const isAdmin = AUTHORIZED_ADMINS.includes(user.id) || 
-                       AUTHORIZED_ADMINS.includes(user.username) ||
-                       AUTHORIZED_ADMINS.includes(user.username.toLowerCase()) ||
-                       AUTHORIZED_ADMINS.includes(user.display_name);
+        const isAdmin = authorizedAdmins.includes(user.id) || 
+                       authorizedAdmins.includes(user.username) ||
+                       authorizedAdmins.includes(user.username.toLowerCase()) ||
+                       authorizedAdmins.includes(user.display_name);
 
         if (isAdmin) {
           console.log("User verified as admin");
@@ -111,7 +122,7 @@ export async function POST(request: Request) {
             success: true,
             isAdmin: true,
             userId: sanitizedUserId,
-            adminToken: adminToken // Return this token for subsequent admin API calls
+            adminToken: adminToken
           });
         } else {
           console.log("User not in admin list:", {
@@ -163,9 +174,10 @@ export async function GET(request: Request) {
     }
 
     const sanitizedUserId = sanitizeInput(userId);
+    const authorizedAdmins = getAuthorizedAdmins();
     
     // Quick check against admin list
-    const isAdmin = AUTHORIZED_ADMINS.includes(sanitizedUserId);
+    const isAdmin = authorizedAdmins.includes(sanitizedUserId);
     
     // If not found directly, check database
     if (!isAdmin && adminSupabase) {
@@ -177,10 +189,10 @@ export async function GET(request: Request) {
           .single();
 
         if (!error && user) {
-          const dbIsAdmin = AUTHORIZED_ADMINS.includes(user.id) || 
-                           AUTHORIZED_ADMINS.includes(user.username) ||
-                           AUTHORIZED_ADMINS.includes(user.username.toLowerCase()) ||
-                           AUTHORIZED_ADMINS.includes(user.display_name);
+          const dbIsAdmin = authorizedAdmins.includes(user.id) || 
+                           authorizedAdmins.includes(user.username) ||
+                           authorizedAdmins.includes(user.username.toLowerCase()) ||
+                           authorizedAdmins.includes(user.display_name);
           
           return NextResponse.json({
             isAdmin: dbIsAdmin,

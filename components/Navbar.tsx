@@ -29,8 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// Define owner ID - replace with your actual owner user ID
-const OWNER_ID = "Sparths";
+
 
 interface NavLinkProps {
   icon: React.ElementType;
@@ -70,14 +69,24 @@ const Navbar = () => {
   const [activeNav, setActiveNav] = useState("/");
   const [showAuthDialog, setShowAuthDialog] = useState(false);
 
+  
+
   const { user, isAuthenticated, logout } = useAuth();
   
+
+  const getOwnerIds = (): string[] => {
+  // You can make this configurable via props or context if needed
+  return process.env.NEXT_PUBLIC_AUTHORIZED_ADMINS?.split(',').map(admin => admin.trim()) || [];
+};
   // Check if user is the owner
-  const isOwner = user && (user.id === OWNER_ID || user.username === OWNER_ID);
+  const ownerIds = getOwnerIds();
+const isOwner = user && (ownerIds.includes(user.id) || ownerIds.includes(user.username));   
 
   useEffect(() => {
     setActiveNav(pathname);
   }, [pathname]);
+
+  
 
   return (
     <nav className="fixed top-0 w-full bg-slate-900/90 backdrop-blur-lg border-b border-slate-700 z-50">

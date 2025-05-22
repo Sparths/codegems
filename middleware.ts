@@ -5,14 +5,14 @@ import type { NextRequest } from 'next/server';
 // Rate limiting store (in production, use Redis or a database)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 
-// Rate limiting configuration - More reasonable limits
+// Much higher rate limiting configuration
 const RATE_LIMIT_CONFIG = {
-  '/api/auth': { maxRequests: 10, windowMs: 15 * 60 * 1000 }, // 10 requests per 15 minutes
-  '/api/project-requests': { maxRequests: 5, windowMs: 60 * 60 * 1000 }, // 5 requests per hour
-  '/api/comments': { maxRequests: 20, windowMs: 5 * 60 * 1000 }, // 20 requests per 5 minutes
-  '/api/ratings': { maxRequests: 30, windowMs: 60 * 60 * 1000 }, // 30 requests per hour
-  '/api/users': { maxRequests: 15, windowMs: 15 * 60 * 1000 }, // 15 requests per 15 minutes
-  'default': { maxRequests: 100, windowMs: 15 * 60 * 1000 } // Default rate limit
+  '/api/auth': { maxRequests: 100, windowMs: 15 * 60 * 1000 }, // 100 requests per 15 minutes
+  '/api/project-requests': { maxRequests: 50, windowMs: 60 * 60 * 1000 }, // 50 requests per hour
+  '/api/comments': { maxRequests: 500, windowMs: 5 * 60 * 1000 }, // 500 requests per 5 minutes
+  '/api/ratings': { maxRequests: 500, windowMs: 60 * 60 * 1000 }, // 500 requests per hour
+  '/api/users': { maxRequests: 150, windowMs: 15 * 60 * 1000 }, // 150 requests per 15 minutes
+  'default': { maxRequests: 2000, windowMs: 15 * 60 * 1000 } // 2000 requests per 15 minutes
 };
 
 function getClientIP(request: NextRequest): string {

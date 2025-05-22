@@ -88,26 +88,29 @@ const handleFinalSubmit = async () => {
       message: "Submitting your request...",
     });
 
-    console.log("Submitting project with user ID:", user.id); // Add this for debugging
+    console.log("Submitting project with user:", user); // Better logging
 
     const response = await fetch("/api/project-requests", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        // Add authentication header if needed
+        ...(user.token && { "Authorization": `Bearer ${user.token}` })
+      },
       body: JSON.stringify({
         title: projectRequest.title,
         githubLink: projectRequest.githubLink,
         description: projectRequest.description,
         reason: projectRequest.reason,
-        userId: user.id,  // Make sure this is correct
+        userId: user.id,
       }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || "Failed to submit request");
-    }
+    const responseData = await response.json();
 
- 
+    if (!response.ok) {
+      throw new Error(responseData.error || "Failed to submit request");
+    }
 
     setSubmissionStatus({
       status: "success",
@@ -126,11 +129,11 @@ const handleFinalSubmit = async () => {
       router.push('/profile?tab=my-requests');
     }, 3000);
   } catch (error) {
+    console.error("Error submitting project request:", error);
     setSubmissionStatus({
       status: "error",
-      message: "Failed to submit project request. Please try again."
+      message: error instanceof Error ? error.message : "Failed to submit project request. Please try again."
     });
-    console.error("Error submitting project request:", error);
   }
 };
 
