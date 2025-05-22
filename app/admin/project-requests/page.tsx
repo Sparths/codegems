@@ -45,6 +45,7 @@ import {
   FilterX,
   Search,
   Shield,
+  Loader2,
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from '@/components/ui/input';
@@ -66,26 +67,7 @@ interface ProjectRequest {
   };
 }
 
-// Function to verify admin access
-const verifyAdminAccess = async (userId: string, token: string): Promise<boolean> => {
-  try {
-    const response = await fetch('/api/admin/verify', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ userId })
-    });
-    
-    return response.ok;
-  } catch (error) {
-    console.error('Admin verification error:', error);
-    return false;
-  }
-};
-
-// Sanitize input to prevent XSS
+// Input sanitization
 const sanitizeInput = (input: string): string => {
   return input.replace(/[<>]/g, '').trim();
 };
@@ -104,21 +86,67 @@ const AdminProjectRequestsPage = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [isAdminVerified, setIsAdminVerified] = useState(false);
+  const [isCheckingAdmin, setIsCheckingAdmin] = useState(true);
+  const [adminToken, setAdminToken] = useState<string | null>(null);
   
   // For pagination
   const [currentPage, setCurrentPage] = useState(1);
   const requestsPerPage = 10;
 
+  // Function to re-verify admin access when token expires
+  const reVerifyAdminAccess = async () => {
+    if (!user) return;
+    
+    try {
+      console.log("Re-verifying admin access for user:", user.id);
+      
+      const response = await fetch('/api/admin/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: user.id })
+      });
+
+      const responseData = await response.json();
+      console.log("Re-verification response:", responseData);
+
+      if (response.ok && responseData.isAdmin) {
+        console.log("Admin access re-verified successfully");
+        setAdminToken(responseData.adminToken);
+        setError(null);
+        // Retry fetching requests with the new token
+        fetchRequests(responseData.adminToken);
+      } else {
+        console.log("Re-verification failed:", responseData.error);
+        setError('Admin session expired. Please refresh the page.');
+        setIsAdminVerified(false);
+      }
+    } catch (error) {
+      console.error('Re-verification failed:', error);
+      setError('Admin session expired. Please refresh the page.');
+      setIsAdminVerified(false);
+    }
+  };
+
   // Admin verification effect
   useEffect(() => {
     const checkAdminAccess = async () => {
+      console.log("Starting admin access check");
+      console.log("Is authenticated:", isAuthenticated);
+      console.log("User:", user);
+
       if (!isAuthenticated || !user) {
+        console.log("Not authenticated or no user, redirecting");
         router.push('/');
         return;
       }
 
-      // Check if user has admin privileges
+      setIsCheckingAdmin(true);
+      
       try {
+        console.log("Making admin verification request for user:", user.id);
+        
         const response = await fetch('/api/admin/verify', {
           method: 'POST',
           headers: {
@@ -127,25 +155,41 @@ const AdminProjectRequestsPage = () => {
           body: JSON.stringify({ userId: user.id })
         });
 
-        if (response.ok) {
+        console.log("Admin verification response status:", response.status);
+        
+        const responseData = await response.json();
+        console.log("Admin verification response:", responseData);
+
+        if (response.ok && responseData.isAdmin) {
+          console.log("Admin access verified");
           setIsAdminVerified(true);
-          fetchRequests();
+          setAdminToken(responseData.adminToken); // Store the admin token
+          setError(null);
+          // Start fetching requests with the token directly since state hasn't updated yet
+          fetchRequests(responseData.adminToken);
         } else {
-          setError('Access denied. Admin privileges required.');
+          console.log("Admin access denied:", responseData.error);
+          setError(responseData.error || 'Access denied. Admin privileges required.');
           setTimeout(() => router.push('/'), 3000);
         }
       } catch (error) {
         console.error('Admin verification failed:', error);
-        setError('Failed to verify admin access.');
+        setError('Failed to verify admin access. Please try again.');
         setTimeout(() => router.push('/'), 3000);
+      } finally {
+        setIsCheckingAdmin(false);
       }
     };
 
     checkAdminAccess();
   }, [isAuthenticated, user, router]);
   
-  const fetchRequests = async () => {
-    if (!isAdminVerified) return;
+  const fetchRequests = async (forceToken?: string) => {
+    // If we have a force token, we're in the initial load after verification
+    if (!forceToken && !isAdminVerified) {
+      console.log("Not admin verified, skipping fetch");
+      return;
+    }
     
     setIsLoading(true);
     setError(null);
@@ -156,17 +200,45 @@ const AdminProjectRequestsPage = () => {
         url += `&status=${encodeURIComponent(filterStatus)}`;
       }
       
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${user?.token || ''}`,
-        }
-      });
+      console.log("Fetching requests from:", url);
+      
+      // Create headers object
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Use force token, admin token, or user token in that order
+      if (forceToken) {
+        headers['Authorization'] = `Bearer ${forceToken}`;
+        console.log("Using force token for initial load");
+      } else if (adminToken) {
+        headers['Authorization'] = `Bearer ${adminToken}`;
+        console.log("Using stored admin token:", adminToken.substring(0, 20) + '...');
+      } else if (user?.token) {
+        headers['Authorization'] = `Bearer ${user.token}`;
+        console.log("Using user token");
+      } else {
+        console.log("No token available for authorization");
+      }
+      
+      const response = await fetch(url, { headers });
       
       if (!response.ok) {
-        throw new Error(`Error: ${response.status}`);
+        const errorText = await response.text();
+        console.error("Fetch requests error:", response.status, errorText);
+        
+        // If we get a 403 or 401, the token might be expired - try to re-verify admin access
+        if (response.status === 403 || response.status === 401) {
+          console.log("Token appears to be expired or invalid, re-verifying admin access...");
+          await reVerifyAdminAccess();
+          return; // Exit here, reVerifyAdminAccess will call fetchRequests again if successful
+        }
+        
+        throw new Error(`Error: ${response.status} - ${errorText}`);
       }
       
       let data = await response.json();
+      console.log("Received requests:", data.length);
       
       // Fetch user info for each request
       const userInfoPromises = data.map(async (request: ProjectRequest) => {
@@ -206,14 +278,13 @@ const AdminProjectRequestsPage = () => {
     setUpdateError(null);
     
     try {
-      // Sanitize admin notes
       const sanitizedNotes = sanitizeInput(adminNotes);
       
       const response = await fetch('/api/project-requests', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.token || ''}`,
+          'Authorization': `Bearer ${adminToken || user.token || ''}`,
         },
         body: JSON.stringify({
           requestId: selectedRequest.id,
@@ -281,6 +352,21 @@ const AdminProjectRequestsPage = () => {
   const currentRequests = filteredRequests.slice(indexOfFirstRequest, indexOfLastRequest);
   const totalPages = Math.ceil(filteredRequests.length / requestsPerPage);
   
+  // Show loading state while checking admin access
+  if (isCheckingAdmin) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pt-24 p-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex flex-col items-center justify-center py-20">
+            <Loader2 className="h-12 w-12 animate-spin text-purple-500 mb-4" />
+            <h1 className="text-2xl font-bold text-white mb-2">Verifying Admin Access</h1>
+            <p className="text-gray-400">Please wait while we verify your permissions...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Access control check
   if (!isAuthenticated) {
     return (
@@ -349,10 +435,11 @@ const AdminProjectRequestsPage = () => {
             <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
           </div>
           <Button
-            onClick={fetchRequests}
+            onClick={() => fetchRequests()}
             className="bg-slate-700 hover:bg-slate-600 text-white"
+            disabled={isLoading}
           >
-            <RefreshCw className="mr-2 h-4 w-4" />
+            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
         </div>
