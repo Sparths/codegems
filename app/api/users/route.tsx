@@ -3,8 +3,6 @@ import crypto from "crypto";
 import supabase from "@/lib/supabase";
 import { rateLimit } from "@/lib/rate-limiter";
 
-
-
 interface Badge {
   id: string;
   name: string;
@@ -12,8 +10,6 @@ interface Badge {
   icon: string;
   points: number;
 }
-
-
 
 // Input validation helpers
 const validateEmail = (email: string): boolean => {
@@ -51,95 +47,8 @@ const generateSalt = (): string => {
   return crypto.randomBytes(32).toString("hex");
 };
 
-
-// GET: Retrieve users (with proper authorization)
-export async function GET(request: Request) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await rateLimit(request, 'users_get');
-    if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429 }
-      );
-    }
-
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("id");
-    const username = searchParams.get("username");
-    const leaderboard = searchParams.get("leaderboard");
-    
-    // Sanitize inputs
-    const sanitizedUserId = userId ? sanitizeInput(userId) : null;
-    const sanitizedUsername = username ? sanitizeInput(username) : null;
-
-    if (sanitizedUserId) {
-      const { data: user, error } = await supabase
-        .from('users')
-        .select('id, username, display_name, points, level, badges, created_at, avatar_url')
-        .eq('id', sanitizedUserId)
-        .single();
-
-      if (error || !user) {
-        return NextResponse.json({ error: "User not found" }, { status: 404 });
-      }
-
-      return NextResponse.json(user);
-    }
-
-    if (sanitizedUsername) {
-      const { data: user, error } = await supabase
-        .from('users')
-        .select('id, username, display_name, points, level, badges, created_at, avatar_url')
-        .ilike('username', sanitizedUsername)
-        .single();
-
-      if (error || !user) {
-        return NextResponse.json({ error: "User not found" }, { status: 404 });
-      }
-
-      return NextResponse.json(user);
-    }
-
-    if (leaderboard) {
-      const { data: users, error } = await supabase
-        .from('users')
-        .select('id, username, display_name, points, badges, level, avatar_url')
-        .order('points', { ascending: false })
-        .limit(10);
-
-      if (error) {
-        return NextResponse.json({ 
-          error: "Failed to get leaderboard" 
-        }, { status: 500 });
-      }
-
-      return NextResponse.json(users || []);
-    }
-
-    // Return limited user info for general requests
-    const { data: users, error } = await supabase
-      .from('users')
-      .select('id, username, display_name, points, level, created_at, avatar_url')
-      .limit(50); // Limit to prevent large data dumps
-
-    if (error) {
-      return NextResponse.json({ 
-        error: "Failed to get users" 
-      }, { status: 500 });
-    }
-
-    return NextResponse.json(users || []);
-  } catch (error) {
-    console.error("Error in GET users route:", error);
-    return NextResponse.json({ 
-      error: "Internal server error" 
-    }, { status: 500 });
-  }
-}
-
-// Create user (Registration)
-export async function createUser(request: Request) {
+// Create user (Registration) - NOT EXPORTED
+async function createUser(request: Request) {
   try {
     // Apply rate limiting
     const rateLimitResult = await rateLimit(request, 'users_create');
@@ -277,8 +186,8 @@ export async function createUser(request: Request) {
   }
 }
 
-// Login
-export async function loginUser(request: Request) {
+// Login - NOT EXPORTED
+async function loginUser(request: Request) {
   try {
     // Apply rate limiting
     const rateLimitResult = await rateLimit(request, 'users_login');
@@ -357,8 +266,8 @@ export async function loginUser(request: Request) {
   }
 }
 
-// Update user (with proper authorization)
-export async function updateUser(request: Request) {
+// Update user (with proper authorization) - NOT EXPORTED
+async function updateUser(request: Request) {
   try {
     // Apply rate limiting
     const rateLimitResult = await rateLimit(request, 'users_update');
@@ -477,8 +386,8 @@ export async function updateUser(request: Request) {
   }
 }
 
-// Check badges (with proper authorization)
-export async function checkBadges(request: Request) {
+// Check badges (with proper authorization) - NOT EXPORTED
+async function checkBadges(request: Request) {
   try {
     const body = await request.json();
     const { userId } = body;
@@ -556,6 +465,92 @@ export async function checkBadges(request: Request) {
       { error: "Internal server error" },
       { status: 500 }
     );
+  }
+}
+
+// GET: Retrieve users (with proper authorization)
+export async function GET(request: Request) {
+  try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(request, 'users_get');
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("id");
+    const username = searchParams.get("username");
+    const leaderboard = searchParams.get("leaderboard");
+    
+    // Sanitize inputs
+    const sanitizedUserId = userId ? sanitizeInput(userId) : null;
+    const sanitizedUsername = username ? sanitizeInput(username) : null;
+
+    if (sanitizedUserId) {
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('id, username, display_name, points, level, badges, created_at, avatar_url')
+        .eq('id', sanitizedUserId)
+        .single();
+
+      if (error || !user) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+
+      return NextResponse.json(user);
+    }
+
+    if (sanitizedUsername) {
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('id, username, display_name, points, level, badges, created_at, avatar_url')
+        .ilike('username', sanitizedUsername)
+        .single();
+
+      if (error || !user) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+
+      return NextResponse.json(user);
+    }
+
+    if (leaderboard) {
+      const { data: users, error } = await supabase
+        .from('users')
+        .select('id, username, display_name, points, badges, level, avatar_url')
+        .order('points', { ascending: false })
+        .limit(10);
+
+      if (error) {
+        return NextResponse.json({ 
+          error: "Failed to get leaderboard" 
+        }, { status: 500 });
+      }
+
+      return NextResponse.json(users || []);
+    }
+
+    // Return limited user info for general requests
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('id, username, display_name, points, level, created_at, avatar_url')
+      .limit(50); // Limit to prevent large data dumps
+
+    if (error) {
+      return NextResponse.json({ 
+        error: "Failed to get users" 
+      }, { status: 500 });
+    }
+
+    return NextResponse.json(users || []);
+  } catch (error) {
+    console.error("Error in GET users route:", error);
+    return NextResponse.json({ 
+      error: "Internal server error" 
+    }, { status: 500 });
   }
 }
 
