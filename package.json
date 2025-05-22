@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "build:lenient": "ESLINT_NO_DEV_ERRORS=true next build"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.4",

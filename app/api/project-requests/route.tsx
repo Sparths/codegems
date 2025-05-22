@@ -36,7 +36,7 @@ const validateReason = (reason: string): boolean => {
 };
 
 // Simple admin verification for tokens
-const verifyAdminAccess = async (request: any): Promise<{
+const verifyAdminAccess = async (request: Request): Promise<{
   isValid: boolean;
   user?: { id: string };
 }> => {
@@ -51,7 +51,7 @@ const verifyAdminAccess = async (request: any): Promise<{
     // For legacy users with actual tokens, you'd verify the JWT here
     // For now, we'll return false to force admin token usage
     return { isValid: false };
-  } catch (error) {
+  } catch {
     return { isValid: false };
   }
 };
@@ -305,10 +305,10 @@ export async function GET(request: Request) {
         } else {
           throw new Error("Not an admin token");
         }
-      } catch (tokenError) {
+      } catch {
         // If admin token fails, try legacy admin verification
         console.log("Admin token failed, trying legacy verification");
-        const adminVerification = await verifyAdminAccess(request as any);
+        const adminVerification = await verifyAdminAccess(request as Request);
         if (!adminVerification.isValid) {
           return NextResponse.json(
             { error: "Admin access required" },
@@ -440,10 +440,10 @@ export async function PUT(request: Request) {
       } else {
         throw new Error("Not an admin token");
       }
-    } catch (tokenError) {
+    } catch {
       // If admin token fails, try legacy admin verification
       console.log("Admin token failed, trying legacy verification");
-      const adminVerification = await verifyAdminAccess(request as any);
+      const adminVerification = await verifyAdminAccess(request as Request);
       if (!adminVerification.isValid) {
         return NextResponse.json(
           { error: "Admin access required" },

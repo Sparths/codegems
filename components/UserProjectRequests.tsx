@@ -80,7 +80,7 @@ const fetchRequests = async () => {
   
   useEffect(() => {
     fetchRequests();
-  }, [user]);
+  }, [user, fetchRequests]);
   
   const getStatusBadge = (status: string) => {
     switch (status) {

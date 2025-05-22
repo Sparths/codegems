@@ -6,7 +6,7 @@ interface GitHubRateLimit {
 }
 
 interface GitHubRepoData {
-  _rateLimit: any;
+  _rateLimit: GitHubRateLimit;
   name: string;
   full_name: string;
   description: string;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 
 
+
 const defaultBadges = [
   // Existing Badges
   {
@@ -258,6 +259,13 @@ const defaultBadges = [
   },
 ];
 
+interface BadgeUpdate {
+  id?: string;
+  description?: string;
+  icon?: string;
+  points?: number;
+}
+
 // GET: Get all badges or a specific badge
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -401,7 +409,7 @@ export async function PUT(request: Request) {
     }
 
     // Prepare update object
-    const updates: Record<string, any> = {};
+    const updates: BadgeUpdate = {};
     if (id) updates.id = id; // Now id can be updated
     if (description) updates.description = description;
     if (icon) updates.icon = icon;

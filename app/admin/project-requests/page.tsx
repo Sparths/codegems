@@ -129,59 +129,6 @@ const AdminProjectRequestsPage = () => {
   };
 
   // Admin verification effect
-  useEffect(() => {
-    const checkAdminAccess = async () => {
-      console.log("Starting admin access check");
-      console.log("Is authenticated:", isAuthenticated);
-      console.log("User:", user);
-
-      if (!isAuthenticated || !user) {
-        console.log("Not authenticated or no user, redirecting");
-        router.push('/');
-        return;
-      }
-
-      setIsCheckingAdmin(true);
-      
-      try {
-        console.log("Making admin verification request for user:", user.id);
-        
-        const response = await fetch('/api/admin/verify', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ userId: user.id })
-        });
-
-        console.log("Admin verification response status:", response.status);
-        
-        const responseData = await response.json();
-        console.log("Admin verification response:", responseData);
-
-        if (response.ok && responseData.isAdmin) {
-          console.log("Admin access verified");
-          setIsAdminVerified(true);
-          setAdminToken(responseData.adminToken); // Store the admin token
-          setError(null);
-          // Start fetching requests with the token directly since state hasn't updated yet
-          fetchRequests(responseData.adminToken);
-        } else {
-          console.log("Admin access denied:", responseData.error);
-          setError(responseData.error || 'Access denied. Admin privileges required.');
-          setTimeout(() => router.push('/'), 3000);
-        }
-      } catch (error) {
-        console.error('Admin verification failed:', error);
-        setError('Failed to verify admin access. Please try again.');
-        setTimeout(() => router.push('/'), 3000);
-      } finally {
-        setIsCheckingAdmin(false);
-      }
-    };
-
-    checkAdminAccess();
-  }, [isAuthenticated, user, router]);
   
   const fetchRequests = async (forceToken?: string) => {
     // If we have a force token, we're in the initial load after verification
@@ -270,6 +217,60 @@ const AdminProjectRequestsPage = () => {
     }
   };
   
+  useEffect(() => {
+    const checkAdminAccess = async () => {
+      console.log("Starting admin access check");
+      console.log("Is authenticated:", isAuthenticated);
+      console.log("User:", user);
+
+      if (!isAuthenticated || !user) {
+        console.log("Not authenticated or no user, redirecting");
+        router.push('/');
+        return;
+      }
+
+      setIsCheckingAdmin(true);
+      
+      try {
+        console.log("Making admin verification request for user:", user.id);
+        
+        const response = await fetch('/api/admin/verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId: user.id })
+        });
+
+        console.log("Admin verification response status:", response.status);
+        
+        const responseData = await response.json();
+        console.log("Admin verification response:", responseData);
+
+        if (response.ok && responseData.isAdmin) {
+          console.log("Admin access verified");
+          setIsAdminVerified(true);
+          setAdminToken(responseData.adminToken); // Store the admin token
+          setError(null);
+          // Start fetching requests with the token directly since state hasn't updated yet
+          fetchRequests(responseData.adminToken);
+        } else {
+          console.log("Admin access denied:", responseData.error);
+          setError(responseData.error || 'Access denied. Admin privileges required.');
+          setTimeout(() => router.push('/'), 3000);
+        }
+      } catch (error) {
+        console.error('Admin verification failed:', error);
+        setError('Failed to verify admin access. Please try again.');
+        setTimeout(() => router.push('/'), 3000);
+      } finally {
+        setIsCheckingAdmin(false);
+      }
+    };
+
+    checkAdminAccess();
+  }, [isAuthenticated, user, router, fetchRequests]);
+
   const handleUpdateStatus = async (status: 'accepted' | 'declined') => {
     if (!selectedRequest || !user || !isAdminVerified) return;
     
@@ -761,7 +762,7 @@ const AdminProjectRequestsPage = () => {
               {selectedRequest.status !== 'pending' && (
                 <div className="flex gap-2">
                   <Button 
-                    onClick={() => handleUpdateStatus('pending' as any)}
+                    onClick={() => handleUpdateStatus('pending' as 'accepted' | 'declined')}
                     className="bg-blue-500 hover:bg-blue-600 text-white"
                     disabled={isUpdating}
                   >

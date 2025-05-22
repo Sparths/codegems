@@ -3,19 +3,7 @@ import crypto from "crypto";
 import supabase from "@/lib/supabase";
 import { rateLimit } from "@/lib/rate-limiter";
 
-interface User {
-  id: string;
-  username: string;
-  email: string;
-  display_name: string;
-  password_hash: string;
-  salt: string;
-  points: number;
-  level: number;
-  badges: string[];
-  created_at: string;
-  avatar_url: string;
-}
+
 
 interface Badge {
   id: string;
@@ -531,9 +519,9 @@ export async function checkBadges(request: Request) {
 
     // Badge checking logic (simplified - implement full logic)
     const earnedBadges: Badge[] = [];
-    let userBadges = [...(user.badges || [])];
-    let currentPoints = user.points || 0;
-    let pointsEarned = 0;
+    const userBadges = [...(user.badges || [])];
+    const currentPoints = user.points || 0;
+    const pointsEarned = 0;
 
     // Check for various badge conditions...
     // (Implementation of badge checking logic would go here)

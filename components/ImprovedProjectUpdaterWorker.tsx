@@ -146,7 +146,7 @@ export default function ImprovedProjectUpdaterWorker() {
         clearTimeout(processingTimeout.current);
       }
     };
-  }, []); // Empty dependency array - only run on mount
+  }, [runUpdateProcess]); // Empty dependency array - only run on mount
   
   // Don't render anything
   return null;

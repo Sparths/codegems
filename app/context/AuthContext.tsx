@@ -5,13 +5,12 @@ import React, {
   useContext,
   useState,
   useEffect,
-  useCallback,
   ReactNode,
 } from "react";
 import { useToast } from "@/hooks/use-toast";
 import supabase from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { Session, User } from "@supabase/supabase-js";
+import { User } from "@supabase/supabase-js";
 
 interface AuthUser {
   token: string;
@@ -66,40 +65,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // If user doesn't exist in our database, create it
       if (!userData) {
         console.log("Creating new user for Supabase Auth user:", supabaseUser.id);
-        
-        const githubUsername = supabaseUser.user_metadata.user_name || 
-                               supabaseUser.user_metadata.preferred_username || 
-                               `user_${Date.now()}`;
-                               
-        const displayName = supabaseUser.user_metadata.full_name || 
-                            githubUsername;
-                            
-        const avatarUrl = supabaseUser.user_metadata.avatar_url || 
-                         `https://api.dicebear.com/7.x/bottts/svg?seed=${githubUsername}`;
-        
-// In the formatUser function, when creating a new user:
-const newUser = {
-  id: supabaseUser.id,
-  username: githubUsername,
-  display_name: displayName,
-  email: supabaseUser.email,
-  // Set these to null explicitly for GitHub users
-  password_hash: null,  
-  salt: null,
-  points: 10, // Starting points
-  level: 1,
-  badges: ["Newcomer"], // Newcomer badge
-  created_at: new Date().toISOString(),
-  avatar_url: avatarUrl,
-  auth_provider: 'github',
-};
+
+        const githubUsername = supabaseUser.user_metadata.user_name ||
+          supabaseUser.user_metadata.preferred_username ||
+          `user_${Date.now()}`;
+
+        const displayName = supabaseUser.user_metadata.full_name ||
+          githubUsername;
+
+        const avatarUrl = supabaseUser.user_metadata.avatar_url ||
+          `https://api.dicebear.com/7.x/bottts/svg?seed=${githubUsername}`;
+
+        // In the formatUser function, when creating a new user:
+        const newUser = {
+          id: supabaseUser.id,
+          username: githubUsername,
+          display_name: displayName,
+          email: supabaseUser.email,
+          // Set these to null explicitly for GitHub users
+          password_hash: null,
+          salt: null,
+          points: 10, // Starting points
+          level: 1,
+          badges: ["Newcomer"], // Newcomer badge
+          created_at: new Date().toISOString(),
+          avatar_url: avatarUrl,
+          auth_provider: 'github',
+        };
 
         console.log("Attempting to create user with data:", JSON.stringify(newUser));
 
         // Use upsert instead of insert to handle potential race conditions
         const { error: insertError } = await supabase
           .from('users')
-          .upsert(newUser, { 
+          .upsert(newUser, {
             onConflict: 'id',
             ignoreDuplicates: false
           });
@@ -114,17 +113,17 @@ const newUser = {
 
         // Add migration record
         try {
-await supabase
-  .from('auth_migrations')
-  .upsert({
-    user_id: supabaseUser.id,
-    migrated: true,
-    old_auth: false,
-    migrated_at: new Date().toISOString()
-  }, {
-    onConflict: 'user_id'
-  });
-            
+          await supabase
+            .from('auth_migrations')
+            .upsert({
+              user_id: supabaseUser.id,
+              migrated: true,
+              old_auth: false,
+              migrated_at: new Date().toISOString()
+            }, {
+              onConflict: 'user_id'
+            });
+
           console.log("Migration record created");
         } catch (migrationError) {
           console.error("Error creating migration record:", migrationError);
@@ -144,32 +143,32 @@ await supabase
           // Non-critical error
         }
 
-return {
-  id: newUser.id,
-  username: newUser.username,
-  displayName: newUser.display_name,
-  email: newUser.email,
-  points: newUser.points,
-  level: newUser.level,
-  badges: newUser.badges,
-  avatarUrl: newUser.avatar_url,
-  authProvider: 'github', // This is just for the front-end, not stored in DB
-};
+        return {
+          id: newUser.id,
+          username: newUser.username,
+          displayName: newUser.display_name,
+          email: newUser.email,
+          points: newUser.points,
+          level: newUser.level,
+          badges: newUser.badges,
+          avatarUrl: newUser.avatar_url,
+          authProvider: 'github', // This is just for the front-end, not stored in DB
+        };
       }
 
       // Return existing user data
       console.log("Found existing user:", userData.id);
-return {
-  id: userData.id,
-  username: userData.username,
-  displayName: userData.display_name,
-  email: userData.email,
-  points: userData.points || 0,
-  level: userData.level || 1,
-  badges: userData.badges || [],
-  avatarUrl: userData.avatar_url,
-  authProvider: 'github', // Just set to 'github' for Supabase users
-};
+      return {
+        id: userData.id,
+        username: userData.username,
+        displayName: userData.display_name,
+        email: userData.email,
+        points: userData.points || 0,
+        level: userData.level || 1,
+        badges: userData.badges || [],
+        avatarUrl: userData.avatar_url,
+        authProvider: 'github', // Just set to 'github' for Supabase users
+      };
     } catch (error) {
       console.error("Error formatting user:", error);
       console.error("Error details:", JSON.stringify(error));
@@ -184,7 +183,7 @@ return {
   ): Promise<boolean> => {
     try {
       setIsLoading(true);
-      
+
       // Call the legacy login endpoint
       const response = await fetch("/api/users?action=login", {
         method: "POST",
@@ -193,7 +192,7 @@ return {
         },
         body: JSON.stringify({ username, password }),
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         toast({
@@ -203,9 +202,9 @@ return {
         });
         return false;
       }
-      
+
       const userData = await response.json();
-      
+
       // Create a formatted user object
       const formattedUser: AuthUser = {
         id: userData.id,
@@ -218,34 +217,34 @@ return {
         avatarUrl: userData.avatar_url,
         authProvider: 'legacy',
       };
-      
+
       setUser(formattedUser);
-      
+
       // Store in local storage for persistence
       localStorage.setItem("user", JSON.stringify(formattedUser));
-      
+
       // Update auth migrations table to track this user
       try {
-await supabase
-  .from('auth_migrations')
-  .upsert({
-    user_id: formattedUser.id,
-    migrated: false,
-    old_auth: true,
-    migrated_at: new Date().toISOString()
-  }, {
-    onConflict: 'user_id'
-  });
+        await supabase
+          .from('auth_migrations')
+          .upsert({
+            user_id: formattedUser.id,
+            migrated: false,
+            old_auth: true,
+            migrated_at: new Date().toISOString()
+          }, {
+            onConflict: 'user_id'
+          });
       } catch (error) {
         console.error("Error updating auth migrations:", error);
         // Non-critical error
       }
-      
+
       toast({
         title: "Successfully signed in",
         description: `Welcome back, ${formattedUser.displayName}!`,
       });
-      
+
       return true;
     } catch (error) {
       console.error("Login error:", error);
@@ -263,10 +262,10 @@ await supabase
   // Function to refresh user profile data
   const refreshUserProfile = async () => {
     if (!supabaseUser && !user) return;
-    
+
     try {
       setIsLoading(true);
-      
+
       if (supabaseUser) {
         // For Supabase Auth users
         const formattedUser = await formatUser(supabaseUser);
@@ -300,52 +299,52 @@ await supabase
     }
   };
 
-// Update user data - simplified version
-const updateUser = async (userData: any): Promise<boolean> => {
-  try {
-    setIsLoading(true);
-    
-    if (!user) return false;
-    
-    // Only update display_name field
-    const { error } = await supabase
-      .from('users')
-      .update({
-        display_name: userData.displayName || user.displayName,
-      })
-      .eq('id', user.id);
-      
-    if (error) {
+  // Update user data - simplified version
+  const updateUser = async (userData: any): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+
+      if (!user) return false;
+
+      // Only update display_name field
+      const { error } = await supabase
+        .from('users')
+        .update({
+          display_name: userData.displayName || user.displayName,
+        })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error("Error updating user:", error);
+        toast({
+          title: "Update failed",
+          description: error.message || "Failed to update profile",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      // Refresh user data
+      await refreshUserProfile();
+
+      toast({
+        title: "Profile updated",
+        description: "Your display name has been successfully updated.",
+      });
+
+      return true;
+    } catch (error) {
       console.error("Error updating user:", error);
       toast({
-        title: "Update failed",
-        description: error.message || "Failed to update profile",
+        title: "Error",
+        description: "An unexpected error occurred.",
         variant: "destructive",
       });
       return false;
+    } finally {
+      setIsLoading(false);
     }
-    
-    // Refresh user data
-    await refreshUserProfile();
-    
-    toast({
-      title: "Profile updated",
-      description: "Your display name has been successfully updated.",
-    });
-    
-    return true;
-  } catch (error) {
-    console.error("Error updating user:", error);
-    toast({
-      title: "Error",
-      description: "An unexpected error occurred.",
-      variant: "destructive",
-    });
-    return false;
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   // Initialize auth state on load
   useEffect(() => {
@@ -360,7 +359,7 @@ const updateUser = async (userData: any): Promise<boolean> => {
         const { data: { subscription } } = await supabase.auth.onAuthStateChange(
           async (event, session) => {
             console.log("Auth state change:", event);
-            
+
             if (session?.user) {
               setSupabaseUser(session.user);
               try {
@@ -377,7 +376,7 @@ const updateUser = async (userData: any): Promise<boolean> => {
               // Only clear Supabase user, don't clear regular user 
               // (legacy users might still be logged in)
               setSupabaseUser(null);
-              
+
               // Check if there's a legacy user in localStorage
               const storedUser = localStorage.getItem("user");
               if (storedUser) {
@@ -492,12 +491,12 @@ const updateUser = async (userData: any): Promise<boolean> => {
         localStorage.removeItem("user");
         setUser(null);
       }
-      
+
       toast({
         title: "Signed out",
         description: "You have been successfully signed out.",
       });
-      
+
       router.push('/');
     } catch (error) {
       console.error("Logout error:", error);
