@@ -13,7 +13,7 @@ import { useRouter } from "next/navigation";
 import { User } from "@supabase/supabase-js";
 
 interface AuthUser {
-  token: string;
+  token?: string; // Make token optional since Supabase users don't always have tokens
   id: string;
   username: string;
   displayName: string;
@@ -143,7 +143,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // Non-critical error
         }
 
-        return {
+return {
           id: newUser.id,
           username: newUser.username,
           displayName: newUser.display_name,
@@ -153,12 +153,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           badges: newUser.badges,
           avatarUrl: newUser.avatar_url,
           authProvider: 'github', // This is just for the front-end, not stored in DB
+          token: undefined, // No token for Supabase users
         };
       }
 
       // Return existing user data
       console.log("Found existing user:", userData.id);
-      return {
+    return {
         id: userData.id,
         username: userData.username,
         displayName: userData.display_name,
@@ -168,6 +169,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         badges: userData.badges || [],
         avatarUrl: userData.avatar_url,
         authProvider: 'github', // Just set to 'github' for Supabase users
+        token: undefined, // No token for Supabase users
       };
     } catch (error) {
       console.error("Error formatting user:", error);
@@ -206,7 +208,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const userData = await response.json();
 
       // Create a formatted user object
-      const formattedUser: AuthUser = {
+const formattedUser: AuthUser = {
         id: userData.id,
         username: userData.username,
         displayName: userData.display_name,
@@ -216,6 +218,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         badges: userData.badges || [],
         avatarUrl: userData.avatar_url,
         authProvider: 'legacy',
+        token: userData.token, // Include the token for legacy users
       };
 
       setUser(formattedUser);

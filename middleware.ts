@@ -24,7 +24,8 @@ function getClientIP(request: NextRequest): string {
   if (forwarded) return forwarded.split(',')[0].trim();
   if (realIP) return realIP;
   
-  return request.ip || 'unknown';
+  // Remove the request.ip fallback since it doesn't exist
+  return 'unknown';
 }
 
 function getRateLimitKey(request: NextRequest): string {
