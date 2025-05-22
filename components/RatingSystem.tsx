@@ -61,7 +61,7 @@ const RatingSystem: React.FC<RatingSystemProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [users, setUsers] = useState<Record<string, User>>({});
+
 
   const { toast } = useToast();
   const { user, isAuthenticated } = useAuth();
@@ -114,7 +114,7 @@ const RatingSystem: React.FC<RatingSystemProps> = ({
       
       // Fetch user data for all ratings in a single request
       const usersData = await fetchUserData(userIds);
-      setUsers(usersData);
+
       
       // Attach user data to ratings
       const enhancedRatings = ratings.map((rating: Rating) => ({
@@ -427,7 +427,7 @@ const RatingSystem: React.FC<RatingSystemProps> = ({
           {existingRating && (
             <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
               <span className="text-sm text-gray-400">
-                You've already rated this project. You can edit your rating.
+                You&apos;ve already rated this project. You can edit your rating.
               </span>
             </div>
           )}

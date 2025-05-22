@@ -47,7 +47,7 @@ const verifyAdminAccess = async (request: any): Promise<{
       return { isValid: false };
     }
 
-    const token = authHeader.substring(7);
+
     // For legacy users with actual tokens, you'd verify the JWT here
     // For now, we'll return false to force admin token usage
     return { isValid: false };
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
     }
 
     // Check for duplicate submissions
-    const { data: existingRequest, error: duplicateError } = await supabase
+    const { data: existingRequest } = await supabase
       .from('project_requests')
       .select('id')
       .eq('user_id', sanitizedUserId)
@@ -145,7 +145,7 @@ export async function POST(request: Request) {
 
     // Check recent submissions to prevent spam
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const { data: recentRequests, error: recentError } = await supabase
+    const { data: recentRequests } = await supabase
       .from('project_requests')
       .select('id')
       .eq('user_id', sanitizedUserId)

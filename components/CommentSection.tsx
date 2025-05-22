@@ -69,7 +69,6 @@ interface BadgeResponse {
 
 const CommentSection: React.FC<CommentSectionProps> = ({ projectName }) => {
   const [comments, setComments] = useState<Comment[]>([]);
-  const [users, setUsers] = useState<Record<string, User>>({});
   const [newComment, setNewComment] = useState("");
   const [replyToComment, setReplyToComment] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
@@ -125,7 +124,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ projectName }) => {
           
           // Fetch user data for all comments in a single request
           const usersData = await fetchUserData(userIds);
-          setUsers(usersData);
+       
           
           // Attach user data to comments
           const enhancedComments = commentsData.map((comment: Comment) => ({

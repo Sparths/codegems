@@ -321,9 +321,7 @@ export default function GithubProjectsPage() {
   );
   const totalPages = Math.ceil(filteredProjects.length / projectsPerPage);
 
-  const handleCardClick = (url: string) => {
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
+
 
   const handleProjectRequest = async () => {
     if (

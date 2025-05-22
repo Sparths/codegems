@@ -136,7 +136,6 @@ export default function SavedPage() {
   const { removeProject, savedProjects, isLoading } = useSaved();
   const { isAuthenticated } = useAuth();
   const [savedProjectDetails, setSavedProjectDetails] = useState<Project[]>([]);
-  const [showWarning, setShowWarning] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [showAuthDialog, setShowAuthDialog] = useState<boolean>(false);
 

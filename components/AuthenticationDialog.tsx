@@ -65,7 +65,7 @@ const AuthenticationDialog: React.FC<AuthDialogProps> = ({
         <div className="bg-slate-700/50 rounded-lg p-3 flex items-start gap-2">
           <AlertCircle className="text-blue-400 h-5 w-5 mt-0.5 flex-shrink-0" />
           <p className="text-sm text-gray-300">
-            When you sign in with GitHub, you'll get your first badge and 10 points!
+            When you sign in with GitHub, you&apos;ll get your first badge and 10 points!
           </p>
         </div>
 

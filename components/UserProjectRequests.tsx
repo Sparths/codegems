@@ -147,7 +147,7 @@ const fetchRequests = async () => {
     return (
       <Card className="bg-slate-800/50 border-slate-700 text-white">
         <CardContent className="pt-6 text-center">
-          <p className="text-gray-400">You haven't submitted any project requests yet.</p>
+          <p className="text-gray-400">You haven&apos;t submitted any project requests yet.</p>
           <Button
             onClick={() => window.location.href = '/request'}
             className="mt-4 bg-purple-500 hover:bg-purple-600 text-white"

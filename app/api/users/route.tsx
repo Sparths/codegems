@@ -25,12 +25,7 @@ interface Badge {
   points: number;
 }
 
-interface BadgeResponse {
-  earnedBadges: Badge[];
-  levelUp: boolean;
-  currentLevel: number;
-  currentPoints: number;
-}
+
 
 // Input validation helpers
 const validateEmail = (email: string): boolean => {
@@ -68,14 +63,6 @@ const generateSalt = (): string => {
   return crypto.randomBytes(32).toString("hex");
 };
 
-// Verify user session/token (simplified - in production use JWT)
-const verifyUserSession = async (userId: string, token?: string): Promise<boolean> => {
-  // This is a simplified check - implement proper session management
-  if (!userId || !token) return false;
-  
-  // In production, verify the token against stored sessions
-  return true;
-};
 
 // GET: Retrieve users (with proper authorization)
 export async function GET(request: Request) {

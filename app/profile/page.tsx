@@ -21,10 +21,7 @@ import {
   Award,
   Star,
   MessageSquare,
-  TrendingUp,
   User,
-  Mail,
-  Camera,
   Settings,
   FileText,
 } from "lucide-react";

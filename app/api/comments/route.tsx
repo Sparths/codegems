@@ -199,7 +199,7 @@ export async function POST(request: Request) {
 
     // Check for recent comments to prevent spam (more lenient)
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    const { data: recentComments, error: recentError } = await supabase
+    const { data: recentComments } = await supabase
       .from('comments')
       .select('id')
       .eq('user_id', sanitizedUserId)
@@ -213,7 +213,7 @@ export async function POST(request: Request) {
     }
 
     // Check for duplicate comments
-    const { data: duplicateComment, error: duplicateError } = await supabase
+    const { data: duplicateComment } = await supabase
       .from('comments')
       .select('id')
       .eq('user_id', sanitizedUserId)

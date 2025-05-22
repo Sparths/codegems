@@ -9,7 +9,6 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  CardFooter,
 } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -395,7 +394,7 @@ const AdminProjectRequestsPage = () => {
           <Shield className="h-16 w-16 text-red-400 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-white mb-2">Access Denied</h1>
           <p className="text-gray-400 mb-6">
-            You don't have permission to view this page.
+            You don&apos;t have permission to view this page.
           </p>
           {error && (
             <Alert className="bg-red-500/20 border-red-500 mb-4">

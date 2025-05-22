@@ -46,7 +46,7 @@ export async function GET() {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     
-    const { count: needsUpdateCount, error: projectError } = await supabase
+    const { count: needsUpdateCount } = await supabase
       .from('projects')
       .select('*', { count: 'exact', head: true })
       .or(`last_updated.is.null,last_updated.lt.${yesterday.toISOString()}`);

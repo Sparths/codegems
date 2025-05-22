@@ -107,7 +107,7 @@ const handleFinalSubmit = async () => {
       throw new Error(errorData.error || "Failed to submit request");
     }
 
-    const data = await response.json();
+ 
 
     setSubmissionStatus({
       status: "success",
@@ -192,7 +192,7 @@ const handleFinalSubmit = async () => {
                   </div>
                   <div className="flex items-start gap-2">
                     <Check className="text-green-500 mt-1 shrink-0" />
-                    <p>Include detailed descriptions to help others understand the project's value</p>
+                    <p>Include detailed descriptions to help others understand the project&apos;s value</p>
                   </div>
                   <div className="flex items-start gap-2">
                     <Check className="text-green-500 mt-1 shrink-0" />
@@ -205,7 +205,7 @@ const handleFinalSubmit = async () => {
                   <ul className="space-y-3">
                     <li className="flex items-start gap-2">
                       <Check className="text-green-500 mt-1 shrink-0" />
-                      <p>Clear description of the project's purpose and benefits</p>
+                      <p>Clear description of the project&apos;s purpose and benefits</p>
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="text-green-500 mt-1 shrink-0" />
@@ -227,7 +227,7 @@ const handleFinalSubmit = async () => {
                     <Star className="text-yellow-400" />
                     Earn Rewards!
                   </h3>
-                  <p className="text-gray-300">When your project suggestion is accepted, you'll earn:</p>
+                  <p className="text-gray-300">When your project suggestion is accepted, you&apos;ll earn:</p>
                   <ul className="mt-2 space-y-1">
                     <li className="flex items-center gap-2">
                       <Check className="text-green-500 h-4 w-4" />
@@ -235,7 +235,7 @@ const handleFinalSubmit = async () => {
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="text-green-500 h-4 w-4" />
-                      <span>The "Explorer" badge</span>
+                      <span>The &quot;Explorer&quot; badge</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="text-green-500 h-4 w-4" />
@@ -337,7 +337,7 @@ const handleFinalSubmit = async () => {
             </AlertDialogTitle>
             <AlertDialogDescription className="text-gray-300 space-y-4">
               <p>
-                Don't miss updates about your submission! Join our vibrant Discord community to:
+                Don&apos;t miss updates about your submission! Join our vibrant Discord community to:
               </p>
               <ul className="space-y-2">
                 <li className="flex items-start gap-2">
