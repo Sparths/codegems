@@ -5,27 +5,24 @@ import type { NextRequest } from 'next/server';
 // Rate limiting store (in production, use Redis or a database)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 
-// Rate limiting configuration
+// Rate limiting configuration - More reasonable limits
 const RATE_LIMIT_CONFIG = {
-  '/api/auth': { maxRequests: 500, windowMs: 1 * 60 * 1000 }, // 5 requests per 15 minutes
-  '/api/project-requests': { maxRequests: 500, windowMs: 1 * 60 * 1000 }, // 3 requests per hour
-  '/api/comments': { maxRequests: 500, windowMs: 1 * 60 * 1000 }, // 10 requests per 5 minutes
-  '/api/ratings': { maxRequests: 500, windowMs: 1 * 60 * 1000 }, // 20 requests per hour
-  '/api/users': { maxRequests: 500, windowMs: 1 * 60 * 1000 }, // 10 requests per 15 minutes
-  'default': { maxRequests: 500, windowMs: 1 * 60 * 1000 } // Default rate limit
+  '/api/auth': { maxRequests: 10, windowMs: 15 * 60 * 1000 }, // 10 requests per 15 minutes
+  '/api/project-requests': { maxRequests: 5, windowMs: 60 * 60 * 1000 }, // 5 requests per hour
+  '/api/comments': { maxRequests: 20, windowMs: 5 * 60 * 1000 }, // 20 requests per 5 minutes
+  '/api/ratings': { maxRequests: 30, windowMs: 60 * 60 * 1000 }, // 30 requests per hour
+  '/api/users': { maxRequests: 15, windowMs: 15 * 60 * 1000 }, // 15 requests per 15 minutes
+  'default': { maxRequests: 100, windowMs: 15 * 60 * 1000 } // Default rate limit
 };
 
 function getClientIP(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
   const realIP = request.headers.get('x-real-ip');
+  const cfIP = request.headers.get('cf-connecting-ip');
   
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
-  
-  if (realIP) {
-    return realIP;
-  }
+  if (cfIP) return cfIP;
+  if (forwarded) return forwarded.split(',')[0].trim();
+  if (realIP) return realIP;
   
   return request.ip || 'unknown';
 }
@@ -104,14 +101,25 @@ export function middleware(request: NextRequest) {
 
   const response = NextResponse.next();
 
-  // Add security headers
+  // Add security headers with updated CSP for Vercel Analytics
   response.headers.set('X-Frame-Options', 'DENY');
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('X-XSS-Protection', '1; mode=block');
+  
+  // Updated CSP to allow Vercel Analytics
   response.headers.set(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://api.github.com https://*.supabase.co wss://*.supabase.co; frame-src 'none';"
+    [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://cdnjs.cloudflare.com https://va.vercel-scripts.com",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https: blob:",
+      "font-src 'self' data:",
+      "connect-src 'self' https://api.github.com https://*.supabase.co wss://*.supabase.co https://vitals.vercel-insights.com https://va.vercel-scripts.com",
+      "frame-src 'none'",
+      "manifest-src 'self'"
+    ].join('; ')
   );
   
   // Remove server information
@@ -123,6 +131,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|icon.png|apple-touch-icon.png).*)',
+    '/((?!_next/static|_next/image|favicon.ico|icon.png|apple-touch-icon.png|site.webmanifest).*)',
   ],
 };

@@ -12,16 +12,16 @@ interface RateLimitConfig {
 // Rate limiting store (in production, use Redis or a database)
 const rateLimitStore = new Map<string, RateLimitRecord>();
 
-// Rate limiting configurations
+// More reasonable rate limiting configurations
 const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
-  'users_create': { maxRequests: 3, windowMs: 15 * 60 * 1000 }, // 3 registrations per 15 minutes
-  'users_login': { maxRequests: 5, windowMs: 15 * 60 * 1000 }, // 5 login attempts per 15 minutes
-  'users_update': { maxRequests: 5, windowMs: 5 * 60 * 1000 }, // 5 updates per 5 minutes
-  'users_get': { maxRequests: 50, windowMs: 5 * 60 * 1000 }, // 50 gets per 5 minutes
-  'project_requests': { maxRequests: 2, windowMs: 60 * 60 * 1000 }, // 2 requests per hour
-  'comments': { maxRequests: 10, windowMs: 5 * 60 * 1000 }, // 10 comments per 5 minutes
-  'ratings': { maxRequests: 20, windowMs: 60 * 60 * 1000 }, // 20 ratings per hour
-  'default': { maxRequests: 100, windowMs: 15 * 60 * 1000 } // Default rate limit
+  'users_create': { maxRequests: 5, windowMs: 15 * 60 * 1000 }, // 5 registrations per 15 minutes
+  'users_login': { maxRequests: 10, windowMs: 15 * 60 * 1000 }, // 10 login attempts per 15 minutes
+  'users_update': { maxRequests: 10, windowMs: 5 * 60 * 1000 }, // 10 updates per 5 minutes
+  'users_get': { maxRequests: 100, windowMs: 5 * 60 * 1000 }, // 100 gets per 5 minutes
+  'project_requests': { maxRequests: 5, windowMs: 60 * 60 * 1000 }, // 5 requests per hour
+  'comments': { maxRequests: 30, windowMs: 5 * 60 * 1000 }, // 30 comments per 5 minutes
+  'ratings': { maxRequests: 50, windowMs: 60 * 60 * 1000 }, // 50 ratings per hour
+  'default': { maxRequests: 200, windowMs: 15 * 60 * 1000 } // Default rate limit
 };
 
 function getClientIP(request: Request): string {
@@ -40,7 +40,12 @@ function getClientIP(request: Request): string {
 export async function rateLimit(
   request: Request, 
   action: string
-): Promise<{ success: boolean; reset?: number }> {
+): Promise<{ 
+  success: boolean; 
+  reset?: number; 
+  remaining?: number;
+  limit?: number;
+}> {
   const ip = getClientIP(request);
   const key = `${ip}:${action}`;
   const now = Date.now();
@@ -55,24 +60,39 @@ export async function rateLimit(
   
   if (!record || now > record.resetTime) {
     // First request or window has reset
-    rateLimitStore.set(key, {
+    const newRecord = {
       count: 1,
       resetTime: now + config.windowMs
-    });
-    return { success: true };
+    };
+    rateLimitStore.set(key, newRecord);
+    
+    return { 
+      success: true,
+      remaining: config.maxRequests - 1,
+      limit: config.maxRequests,
+      reset: Math.ceil((newRecord.resetTime - now) / 1000)
+    };
   }
   
   if (record.count >= config.maxRequests) {
     return { 
-      success: false, 
-      reset: Math.ceil((record.resetTime - now) / 1000) 
+      success: false,
+      remaining: 0,
+      limit: config.maxRequests,
+      reset: Math.ceil((record.resetTime - now) / 1000)
     };
   }
   
   // Increment count
   record.count++;
   rateLimitStore.set(key, record);
-  return { success: true };
+  
+  return { 
+    success: true,
+    remaining: config.maxRequests - record.count,
+    limit: config.maxRequests,
+    reset: Math.ceil((record.resetTime - now) / 1000)
+  };
 }
 
 function cleanupExpiredRecords(): void {
@@ -86,3 +106,26 @@ function cleanupExpiredRecords(): void {
 
 // Clean up expired records every 10 minutes
 setInterval(cleanupExpiredRecords, 10 * 60 * 1000);
+
+// Helper function to create rate limit headers
+export function createRateLimitHeaders(result: { 
+  remaining?: number; 
+  limit?: number; 
+  reset?: number; 
+}): Record<string, string> {
+  const headers: Record<string, string> = {};
+  
+  if (result.limit !== undefined) {
+    headers['X-RateLimit-Limit'] = result.limit.toString();
+  }
+  
+  if (result.remaining !== undefined) {
+    headers['X-RateLimit-Remaining'] = result.remaining.toString();
+  }
+  
+  if (result.reset !== undefined) {
+    headers['X-RateLimit-Reset'] = result.reset.toString();
+  }
+  
+  return headers;
+}

@@ -1,21 +1,36 @@
 {
-    "name": "Code Gems",
-    "short_name": "CodeGems",
-    "icons": [
-      {
-        "src": "/android-chrome-192x192.png",
-        "sizes": "192x192",
-        "type": "image/png"
-      },
-      {
-        "src": "/android-chrome-512x512.png",
-        "sizes": "512x512",
-        "type": "image/png"
-      }
-    ],
-    "theme_color": "#ffffff",
-    "background_color": "#ffffff",
-    "display": "standalone"
-  }
-  
-  
+  "name": "Code Gems - Discover Remarkable GitHub Projects",
+  "short_name": "Code Gems",
+  "description": "Explore and share amazing open-source projects on Code Gems, a community-driven platform for developers, designers, and tech enthusiasts.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#8b5cf6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["productivity", "developer", "utilities"],
+  "lang": "en-US",
+  "scope": "/",
+  "prefer_related_applications": false
+}
