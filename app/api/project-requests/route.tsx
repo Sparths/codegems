@@ -1,93 +1,156 @@
-// app/api/project-requests/route.tsx
 import { NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { generateUUID } from "@/lib/utils-uuid";
 import { createClient } from '@supabase/supabase-js';
+import { rateLimit } from "@/lib/rate-limiter";
+import { verifyAdminAccess } from "@/lib/admin-auth";
 
-const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL!;
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
-// Admin Supabase client with service role to bypass RLS
-// This requires adding SUPABASE_SERVICE_ROLE_KEY to your environment variables
+// Admin Supabase client with service role
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const adminSupabase = supabaseServiceKey ? 
   createClient(supabaseUrl, supabaseServiceKey) : 
-  supabase; // Fallback to regular client if no service key
+  supabase;
+
+// Input validation helpers
+const sanitizeInput = (input: string): string => {
+  return input.replace(/[<>]/g, '').trim();
+};
+
+const validateGitHubUrl = (url: string): boolean => {
+  const githubRegex = /^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/?$/;
+  return githubRegex.test(url);
+};
+
+const validateTitle = (title: string): boolean => {
+  return title.length >= 3 && title.length <= 100;
+};
+
+const validateDescription = (description: string): boolean => {
+  return description.length >= 10 && description.length <= 1000;
+};
+
+const validateReason = (reason: string): boolean => {
+  return reason.length >= 10 && reason.length <= 1000;
+};
+
 export async function POST(request: Request) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(request, 'project_requests');
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Too many project submissions. Please try again later." },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { title, githubLink, description, reason, userId } = body;
 
-    console.log("Processing project request:", {
-      title,
-      githubLink,
-      userId,
-      descriptionLength: description?.length || 0,
-      reasonLength: reason?.length || 0
-    });
-
-    // Validation
-    if (!DISCORD_WEBHOOK_URL) {
-      console.error("Discord webhook URL not configured");
+    // Input validation
+    if (!title || !githubLink || !description || !reason || !userId) {
       return NextResponse.json(
-        { error: "Webhook URL not configured" },
-        { status: 500 }
-      );
-    }
-
-    if (!title || title.length > 100) {
-      return NextResponse.json({ error: "Invalid title" }, { status: 400 });
-    }
-
-    if (!githubLink || !githubLink.startsWith("https://github.com/")) {
-      return NextResponse.json(
-        { error: "Invalid GitHub link" },
+        { error: "All fields are required" },
         { status: 400 }
       );
     }
 
-    if (!userId) {
+    // Sanitize inputs
+    const sanitizedTitle = sanitizeInput(title);
+    const sanitizedGithubLink = sanitizeInput(githubLink);
+    const sanitizedDescription = sanitizeInput(description);
+    const sanitizedReason = sanitizeInput(reason);
+    const sanitizedUserId = sanitizeInput(userId);
+
+    // Validate inputs
+    if (!validateTitle(sanitizedTitle)) {
       return NextResponse.json(
-        { error: "User ID is required" },
+        { error: "Title must be between 3 and 100 characters" },
         { status: 400 }
       );
     }
 
-    // Check if user exists in the database
+    if (!validateGitHubUrl(sanitizedGithubLink)) {
+      return NextResponse.json(
+        { error: "Invalid GitHub repository URL" },
+        { status: 400 }
+      );
+    }
+
+    if (!validateDescription(sanitizedDescription)) {
+      return NextResponse.json(
+        { error: "Description must be between 10 and 1000 characters" },
+        { status: 400 }
+      );
+    }
+
+    if (!validateReason(sanitizedReason)) {
+      return NextResponse.json(
+        { error: "Reason must be between 10 and 1000 characters" },
+        { status: 400 }
+      );
+    }
+
+    // Verify user exists and is authenticated
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('id')
-      .eq('id', userId)
+      .select('id, username')
+      .eq('id', sanitizedUserId)
       .single();
 
-    if (userError) {
-      console.error("Error checking user:", userError);
+    if (userError || !userData) {
       return NextResponse.json(
-        { error: "Failed to verify user" },
-        { status: 500 }
+        { error: "User authentication failed" },
+        { status: 401 }
       );
     }
 
-    if (!userData) {
+    // Check for duplicate submissions
+    const { data: existingRequest, error: duplicateError } = await supabase
+      .from('project_requests')
+      .select('id')
+      .eq('user_id', sanitizedUserId)
+      .eq('github_link', sanitizedGithubLink)
+      .single();
+
+    if (existingRequest) {
       return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
+        { error: "You have already submitted this project" },
+        { status: 400 }
       );
     }
 
-    // 1. Store in Supabase - use adminSupabase to bypass RLS
+    // Check recent submissions to prevent spam
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const { data: recentRequests, error: recentError } = await supabase
+      .from('project_requests')
+      .select('id')
+      .eq('user_id', sanitizedUserId)
+      .gte('created_at', oneHourAgo.toISOString());
+
+    if (recentRequests && recentRequests.length >= 2) {
+      return NextResponse.json(
+        { error: "Too many recent submissions. Please wait before submitting another project." },
+        { status: 429 }
+      );
+    }
+
+    // Store in database
     const requestId = generateUUID();
     const now = new Date().toISOString();
     
-    const { error: insertError } = await adminSupabase  // Use admin client to bypass RLS
+    const { error: insertError } = await adminSupabase
       .from('project_requests')
       .insert({
         id: requestId,
-        user_id: userId,
-        title,
-        github_link: githubLink,
-        description,
-        reason,
+        user_id: sanitizedUserId,
+        title: sanitizedTitle,
+        github_link: sanitizedGithubLink,
+        description: sanitizedDescription,
+        reason: sanitizedReason,
         status: 'pending',
         created_at: now
       });
@@ -95,69 +158,65 @@ export async function POST(request: Request) {
     if (insertError) {
       console.error("Error storing project request:", insertError);
       return NextResponse.json(
-        { error: `Failed to store project request: ${insertError.message}` },
+        { error: "Failed to submit project request" },
         { status: 500 }
       );
     }
 
-    // 2. Send to Discord
-    const discordMessage = {
-      embeds: [
-        {
-          title: "🆕 New Project Request",
-          color: 0x8d15cd,
-          fields: [
+    // Send to Discord (if webhook is configured)
+    if (DISCORD_WEBHOOK_URL) {
+      try {
+        const discordMessage = {
+          embeds: [
             {
-              name: "📝 Project Title",
-              value: title || "Not provided",
+              title: "🆕 New Project Request",
+              color: 0x8d15cd,
+              fields: [
+                {
+                  name: "📝 Project Title",
+                  value: sanitizedTitle.substring(0, 1000),
+                },
+                {
+                  name: "🔗 GitHub Link",
+                  value: sanitizedGithubLink,
+                },
+                {
+                  name: "📋 Description",
+                  value: sanitizedDescription.substring(0, 1000),
+                },
+                {
+                  name: "💡 Why is it good?",
+                  value: sanitizedReason.substring(0, 1000),
+                },
+                {
+                  name: "👤 Submitted by",
+                  value: userData.username,
+                },
+                {
+                  name: "🆔 Request ID",
+                  value: requestId,
+                }
+              ],
+              timestamp: now,
+              footer: {
+                text: "Codegems",
+                icon_url: "https://www.codegems.xyz/icon.png",
+              },
             },
-            {
-              name: "🔗 GitHub Link",
-              value: githubLink || "Not provided",
-            },
-            {
-              name: "📋 Description",
-              value: description?.substring(0, 1000) || "Not provided",
-            },
-            {
-              name: "💡 Why is it good?",
-              value: reason?.substring(0, 1000) || "Not provided",
-            },
-            {
-              name: "🆔 Request ID",
-              value: requestId,
-            },
-            {
-              name: "👤 User ID",
-              value: userId
-            }
           ],
-          timestamp: new Date().toISOString(),
-          footer: {
-            text: "Codegems",
-            icon_url: "https://www.codegems.xyz/icon.png",
+        };
+
+        await fetch(DISCORD_WEBHOOK_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        },
-      ],
-    };
-
-    try {
-      const response = await fetch(DISCORD_WEBHOOK_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(discordMessage),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Discord API error:", errorText);
-        // We continue even if Discord fails as we've stored in the database
+          body: JSON.stringify(discordMessage),
+        });
+      } catch (discordError) {
+        console.error("Error sending to Discord:", discordError);
+        // Continue execution - Discord notification failure shouldn't fail the request
       }
-    } catch (discordError) {
-      console.error("Error sending to Discord:", discordError);
-      // We still return success as the DB operation worked
     }
 
     return NextResponse.json({ 
@@ -167,42 +226,45 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Error processing project request:", error);
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to process request",
-      },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
 }
 
-// app/api/project-requests/route.tsx
-// Just the GET function needs to be fixed:
-
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const userId = searchParams.get("userId");
-  const requestId = searchParams.get("id");
-  const status = searchParams.get("status");
-  const isAdmin = searchParams.get("admin") === "true";
-
-  console.log("Project Requests API GET call with params:", { 
-    userId, requestId, status, isAdmin 
-  });
-
   try {
-    // For admin requests, use admin client to bypass RLS
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("userId");
+    const requestId = searchParams.get("id");
+    const status = searchParams.get("status");
+    const isAdmin = searchParams.get("admin") === "true";
+
+    // Validate and sanitize inputs
+    const sanitizedUserId = userId ? sanitizeInput(userId) : null;
+    const sanitizedRequestId = requestId ? sanitizeInput(requestId) : null;
+    const sanitizedStatus = status ? sanitizeInput(status) : null;
+
     if (isAdmin) {
+      // Verify admin access
+      const adminVerification = await verifyAdminAccess(request as any);
+      if (!adminVerification.isValid) {
+        return NextResponse.json(
+          { error: "Admin access required" },
+          { status: 403 }
+        );
+      }
+
       let query = adminSupabase.from('project_requests').select('*');
       
-      if (status) {
-        query = query.eq('status', status);
+      if (sanitizedStatus && ['pending', 'accepted', 'declined'].includes(sanitizedStatus)) {
+        query = query.eq('status', sanitizedStatus);
       }
       
-      if (requestId) {
-        query = query.eq('id', requestId);
+      if (sanitizedRequestId) {
+        query = query.eq('id', sanitizedRequestId);
       }
       
-      // Sort by creation date, newest first
       query = query.order('created_at', { ascending: false });
       
       const { data: requests, error } = await query;
@@ -215,18 +277,14 @@ export async function GET(request: Request) {
         );
       }
       
-      console.log(`Found ${requests?.length || 0} project requests for admin`);
       return NextResponse.json(requests || []);
     } 
-    // For user requests, make sure we use the regular client and proper filters
-    else if (userId) {
-      console.log(`Fetching requests for user ${userId}`);
-      
-      // Regular user query with RLS applied
+    else if (sanitizedUserId) {
+      // Regular user query - only return their own requests
       const { data: requests, error } = await supabase
         .from('project_requests')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', sanitizedUserId)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -237,74 +295,79 @@ export async function GET(request: Request) {
         );
       }
 
-      console.log(`Found ${requests?.length || 0} project requests for user ${userId}`);
       return NextResponse.json(requests || []);
     } 
-    // For single request lookup
-    else if (requestId) {
+    else if (sanitizedRequestId) {
+      // Single request lookup (only for the owner)
       const { data: request, error } = await supabase
         .from('project_requests')
         .select('*')
-        .eq('id', requestId)
+        .eq('id', sanitizedRequestId)
         .single();
 
-      if (error) {
-        console.error("Error fetching project request:", error);
+      if (error || !request) {
         return NextResponse.json(
-          { error: "Failed to fetch project request" },
-          { status: 500 }
+          { error: "Request not found" },
+          { status: 404 }
         );
       }
 
       return NextResponse.json([request]);
     }
     
-    // Default: return empty array for unspecified requests
     return NextResponse.json([]);
   } catch (error) {
     console.error("Error in GET project-requests:", error);
     return NextResponse.json(
-      { error: "An unexpected error occurred" },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
 }
 
-// PUT: Update a project request status (admin only)
 export async function PUT(request: Request) {
   try {
-    const body = await request.json();
-    const { requestId, status, adminNotes, adminId } = body;
-
-    console.log("Updating project request:", { 
-      requestId, status, adminId, 
-      notesLength: adminNotes?.length || 0 
-    });
-
-    if (!requestId || !status || !adminId) {
+    // Verify admin access
+    const adminVerification = await verifyAdminAccess(request as any);
+    if (!adminVerification.isValid) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Admin access required" },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
+    const { requestId, status, adminNotes } = body;
+
+    if (!requestId || !status) {
+      return NextResponse.json(
+        { error: "Request ID and status are required" },
         { status: 400 }
       );
     }
 
-    if (!['pending', 'accepted', 'declined'].includes(status)) {
+    // Sanitize inputs
+    const sanitizedRequestId = sanitizeInput(requestId);
+    const sanitizedStatus = sanitizeInput(status);
+    const sanitizedAdminNotes = adminNotes ? sanitizeInput(adminNotes) : null;
+
+    if (!['pending', 'accepted', 'declined'].includes(sanitizedStatus)) {
       return NextResponse.json(
         { error: "Invalid status value" },
         { status: 400 }
       );
     }
 
-    // Update the request using admin client to bypass RLS
+    // Update the request
     const now = new Date().toISOString();
     const { error: updateError } = await adminSupabase
       .from('project_requests')
       .update({
-        status,
-        admin_notes: adminNotes || null,
+        status: sanitizedStatus,
+        admin_notes: sanitizedAdminNotes,
         updated_at: now
       })
-      .eq('id', requestId);
+      .eq('id', sanitizedRequestId);
 
     if (updateError) {
       console.error("Error updating project request:", updateError);
@@ -314,52 +377,34 @@ export async function PUT(request: Request) {
       );
     }
 
-    // If request was accepted, get user info to award points and badges
-    if (status === 'accepted') {
+    // Award points and badge if accepted
+    if (sanitizedStatus === 'accepted') {
       const { data: request } = await adminSupabase
         .from('project_requests')
         .select('user_id')
-        .eq('id', requestId)
+        .eq('id', sanitizedRequestId)
         .single();
 
       if (request) {
-        console.log(`Awarding points to user ${request.user_id} for accepted project`);
-        
-        // Award points to the user
-        const { data: userData, error: getUserError } = await adminSupabase
+        // Award points and Explorer badge
+        const { data: userData } = await adminSupabase
           .from('users')
           .select('points, badges')
           .eq('id', request.user_id)
           .single();
 
-        if (!getUserError && userData) {
-          // Update user points (+50 for accepted project)
-          const { error: updateUserError } = await adminSupabase
+        if (userData) {
+          const updatedBadges = userData.badges?.includes("Explorer") 
+            ? userData.badges 
+            : [...(userData.badges || []), "Explorer"];
+
+          await adminSupabase
             .from('users')
             .update({
-              points: (userData.points || 0) + 50
+              points: (userData.points || 0) + 50,
+              badges: updatedBadges
             })
             .eq('id', request.user_id);
-            
-          if (updateUserError) {
-            console.error("Error updating user points:", updateUserError);
-          }
-
-          // Check if user should get the "Explorer" badge
-          if (!userData.badges?.includes("Explorer")) {
-            const { error: updateBadgeError } = await adminSupabase
-              .from('users')
-              .update({
-                badges: [...(userData.badges || []), "Explorer"]
-              })
-              .eq('id', request.user_id);
-              
-            if (updateBadgeError) {
-              console.error("Error updating user badges:", updateBadgeError);
-            }
-          }
-
-          // We'll rely on the next user login to trigger badge checking for level ups
         }
       }
     }
@@ -368,7 +413,7 @@ export async function PUT(request: Request) {
   } catch (error) {
     console.error("Error in PUT project-requests:", error);
     return NextResponse.json(
-      { error: "An unexpected error occurred" },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

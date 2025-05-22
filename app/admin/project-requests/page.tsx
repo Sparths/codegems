@@ -1,8 +1,8 @@
-// app/admin/project-requests/page.tsx
 "use client";
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
+import { useRouter } from 'next/navigation';
 import {
   Card,
   CardContent,
@@ -44,13 +44,10 @@ import {
   User as UserIcon,
   FilterX,
   Search,
+  Shield,
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from '@/components/ui/input';
-import { useRouter } from 'next/navigation';
-
-// Define owner ID - replace with your actual owner user ID
-const OWNER_ID = "Sparths";
 
 interface ProjectRequest {
   id: string;
@@ -69,6 +66,30 @@ interface ProjectRequest {
   };
 }
 
+// Function to verify admin access
+const verifyAdminAccess = async (userId: string, token: string): Promise<boolean> => {
+  try {
+    const response = await fetch('/api/admin/verify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ userId })
+    });
+    
+    return response.ok;
+  } catch (error) {
+    console.error('Admin verification error:', error);
+    return false;
+  }
+};
+
+// Sanitize input to prevent XSS
+const sanitizeInput = (input: string): string => {
+  return input.replace(/[<>]/g, '').trim();
+};
+
 const AdminProjectRequestsPage = () => {
   const { user, isAuthenticated } = useAuth();
   const router = useRouter();
@@ -82,37 +103,64 @@ const AdminProjectRequestsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [isAdminVerified, setIsAdminVerified] = useState(false);
   
   // For pagination
   const [currentPage, setCurrentPage] = useState(1);
   const requestsPerPage = 10;
-  
+
+  // Admin verification effect
   useEffect(() => {
-    // Check if user is authenticated and is the owner
-    if (isAuthenticated && user) {
-      if (user.id !== OWNER_ID && user.username !== OWNER_ID) {
-        // If not the owner, redirect to homepage
+    const checkAdminAccess = async () => {
+      if (!isAuthenticated || !user) {
         router.push('/');
-      } else {
-        fetchRequests();
+        return;
       }
-    } else if (!isAuthenticated) {
-      // If not authenticated, redirect to homepage
-      router.push('/');
-    }
-  }, [isAuthenticated, user, filterStatus]);
+
+      // Check if user has admin privileges
+      try {
+        const response = await fetch('/api/admin/verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId: user.id })
+        });
+
+        if (response.ok) {
+          setIsAdminVerified(true);
+          fetchRequests();
+        } else {
+          setError('Access denied. Admin privileges required.');
+          setTimeout(() => router.push('/'), 3000);
+        }
+      } catch (error) {
+        console.error('Admin verification failed:', error);
+        setError('Failed to verify admin access.');
+        setTimeout(() => router.push('/'), 3000);
+      }
+    };
+
+    checkAdminAccess();
+  }, [isAuthenticated, user, router]);
   
   const fetchRequests = async () => {
+    if (!isAdminVerified) return;
+    
     setIsLoading(true);
     setError(null);
     
     try {
       let url = `/api/project-requests?admin=true`;
       if (filterStatus !== 'all') {
-        url += `&status=${filterStatus}`;
+        url += `&status=${encodeURIComponent(filterStatus)}`;
       }
       
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${user?.token || ''}`,
+        }
+      });
       
       if (!response.ok) {
         throw new Error(`Error: ${response.status}`);
@@ -123,7 +171,7 @@ const AdminProjectRequestsPage = () => {
       // Fetch user info for each request
       const userInfoPromises = data.map(async (request: ProjectRequest) => {
         try {
-          const userResponse = await fetch(`/api/users?id=${request.user_id}`);
+          const userResponse = await fetch(`/api/users?id=${encodeURIComponent(request.user_id)}`);
           if (userResponse.ok) {
             const userData = await userResponse.json();
             return {
@@ -142,7 +190,6 @@ const AdminProjectRequestsPage = () => {
       });
       
       data = await Promise.all(userInfoPromises);
-      
       setRequests(data);
     } catch (err) {
       console.error('Error fetching project requests:', err);
@@ -153,21 +200,25 @@ const AdminProjectRequestsPage = () => {
   };
   
   const handleUpdateStatus = async (status: 'accepted' | 'declined') => {
-    if (!selectedRequest || !user) return;
+    if (!selectedRequest || !user || !isAdminVerified) return;
     
     setIsUpdating(true);
     setUpdateError(null);
     
     try {
+      // Sanitize admin notes
+      const sanitizedNotes = sanitizeInput(adminNotes);
+      
       const response = await fetch('/api/project-requests', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.token || ''}`,
         },
         body: JSON.stringify({
           requestId: selectedRequest.id,
           status,
-          adminNotes,
+          adminNotes: sanitizedNotes,
           adminId: user.id,
         }),
       });
@@ -180,7 +231,7 @@ const AdminProjectRequestsPage = () => {
       setRequests(prev => 
         prev.map(req => 
           req.id === selectedRequest.id 
-            ? { ...req, status, admin_notes: adminNotes, updated_at: new Date().toISOString() } 
+            ? { ...req, status, admin_notes: sanitizedNotes, updated_at: new Date().toISOString() } 
             : req
         )
       );
@@ -214,7 +265,7 @@ const AdminProjectRequestsPage = () => {
   const filteredRequests = requests.filter(request => {
     if (!searchQuery) return true;
     
-    const query = searchQuery.toLowerCase();
+    const query = sanitizeInput(searchQuery.toLowerCase());
     return (
       request.title.toLowerCase().includes(query) ||
       request.github_link.toLowerCase().includes(query) ||
@@ -230,16 +281,42 @@ const AdminProjectRequestsPage = () => {
   const currentRequests = filteredRequests.slice(indexOfFirstRequest, indexOfLastRequest);
   const totalPages = Math.ceil(filteredRequests.length / requestsPerPage);
   
-  // Not authorized check
-  if (!isAuthenticated || (user && user.id !== OWNER_ID && user.username !== OWNER_ID)) {
+  // Access control check
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pt-24 p-8">
         <div className="max-w-md mx-auto text-center py-12">
           <AlertCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-white mb-2">Authentication Required</h1>
+          <p className="text-gray-400 mb-6">
+            You must be signed in to access this page.
+          </p>
+          <Button 
+            onClick={() => router.push('/')}
+            className="bg-purple-500 hover:bg-purple-600 text-white"
+          >
+            Return to Home
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdminVerified) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pt-24 p-8">
+        <div className="max-w-md mx-auto text-center py-12">
+          <Shield className="h-16 w-16 text-red-400 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-white mb-2">Access Denied</h1>
           <p className="text-gray-400 mb-6">
             You don't have permission to view this page.
           </p>
+          {error && (
+            <Alert className="bg-red-500/20 border-red-500 mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
           <Button 
             onClick={() => router.push('/')}
             className="bg-purple-500 hover:bg-purple-600 text-white"
@@ -267,7 +344,10 @@ const AdminProjectRequestsPage = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pt-24 p-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-white">Project Requests Admin</h1>
+          <div className="flex items-center gap-2">
+            <Shield className="h-6 w-6 text-purple-400" />
+            <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
+          </div>
           <Button
             onClick={fetchRequests}
             className="bg-slate-700 hover:bg-slate-600 text-white"
@@ -311,6 +391,7 @@ const AdminProjectRequestsPage = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="bg-slate-800 border-slate-700 text-white pl-10"
+                maxLength={100}
               />
               {searchQuery && (
                 <Button
@@ -365,7 +446,7 @@ const AdminProjectRequestsPage = () => {
                 {currentRequests.map((request) => (
                   <Card 
                     key={request.id}
-                    className={`bg-slate-800/50 border-slate-700 text-white hover:bg-slate-800 transition-colors cursor-pointer`}
+                    className="bg-slate-800/50 border-slate-700 text-white hover:bg-slate-800 transition-colors cursor-pointer"
                     onClick={() => handleViewRequest(request)}
                   >
                     <CardHeader className="pb-2">
@@ -442,21 +523,25 @@ const AdminProjectRequestsPage = () => {
                 </Button>
                 
                 <div className="flex items-center gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                    <Button
-                      key={page}
-                      variant={page === currentPage ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setCurrentPage(page)}
-                      className={
-                        page === currentPage
-                          ? "bg-purple-500 hover:bg-purple-600 text-white"
-                          : "bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
-                      }
-                    >
-                      {page}
-                    </Button>
-                  ))}
+                  {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                    const page = i + Math.max(1, currentPage - 2);
+                    if (page > totalPages) return null;
+                    return (
+                      <Button
+                        key={page}
+                        variant={page === currentPage ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(page)}
+                        className={
+                          page === currentPage
+                            ? "bg-purple-500 hover:bg-purple-600 text-white"
+                            : "bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
+                        }
+                      >
+                        {page}
+                      </Button>
+                    );
+                  })}
                 </div>
                 
                 <Button
@@ -531,7 +616,6 @@ const AdminProjectRequestsPage = () => {
                 <p className="text-gray-300">{selectedRequest.reason}</p>
               </div>
               
-              {/* Admin notes input */}
               <div>
                 <h3 className="text-white font-medium mb-1">Admin Notes</h3>
                 <p className="text-gray-400 text-sm mb-2">
@@ -542,6 +626,7 @@ const AdminProjectRequestsPage = () => {
                   onChange={(e) => setAdminNotes(e.target.value)}
                   placeholder="Add notes for the user (optional)"
                   className="bg-slate-700 border-slate-600 text-white placeholder:text-gray-400 min-h-32"
+                  maxLength={1000}
                 />
               </div>
               
@@ -590,7 +675,7 @@ const AdminProjectRequestsPage = () => {
               {selectedRequest.status !== 'pending' && (
                 <div className="flex gap-2">
                   <Button 
-                    onClick={() => handleUpdateStatus('pending')}
+                    onClick={() => handleUpdateStatus('pending' as any)}
                     className="bg-blue-500 hover:bg-blue-600 text-white"
                     disabled={isUpdating}
                   >

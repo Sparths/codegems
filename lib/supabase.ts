@@ -47,39 +47,42 @@ export type Database = {
           username: string
           email: string
           display_name: string
-          password_hash: string
-          salt: string
+          password_hash: string | null
+          salt: string | null
           points: number
           level: number
           badges: string[]
           created_at: string
           avatar_url: string
+          auth_provider: string | null
         }
         Insert: {
           id: string
           username: string
           email: string
           display_name: string
-          password_hash: string
-          salt: string
+          password_hash?: string | null
+          salt?: string | null
           points?: number
           level?: number
           badges?: string[]
           created_at?: string
           avatar_url?: string
+          auth_provider?: string | null
         }
         Update: {
           id?: string
           username?: string
           email?: string
           display_name?: string
-          password_hash?: string
-          salt?: string
+          password_hash?: string | null
+          salt?: string | null
           points?: number
           level?: number
           badges?: string[]
           created_at?: string
           avatar_url?: string
+          auth_provider?: string | null
         }
       }
       badges: {
@@ -114,6 +117,7 @@ export type Database = {
           tags: string[]
           url: string
           languages: Record<string, number>
+          last_updated: string | null
         }
         Insert: {
           name: string
@@ -123,6 +127,7 @@ export type Database = {
           tags: string[]
           url: string
           languages: Record<string, number>
+          last_updated?: string | null
         }
         Update: {
           name?: string
@@ -132,6 +137,7 @@ export type Database = {
           tags?: string[]
           url?: string
           languages?: Record<string, number>
+          last_updated?: string | null
         }
       }
       comments: {
@@ -198,6 +204,98 @@ export type Database = {
           updated_at?: string
         }
       }
+      saved_projects: {
+        Row: {
+          user_id: string
+          project_name: string
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          project_name: string
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          project_name?: string
+          created_at?: string
+        }
+      }
+      admin_users: {
+        Row: {
+          id: string
+          username: string
+          email: string
+          is_admin: boolean
+          admin_level: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          username: string
+          email: string
+          is_admin?: boolean
+          admin_level?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          username?: string
+          email?: string
+          is_admin?: boolean
+          admin_level?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      auth_migrations: {
+        Row: {
+          user_id: string
+          migrated: boolean
+          old_auth: boolean
+          migrated_at: string
+        }
+        Insert: {
+          user_id: string
+          migrated?: boolean
+          old_auth?: boolean
+          migrated_at?: string
+        }
+        Update: {
+          user_id?: string
+          migrated?: boolean
+          old_auth?: boolean
+          migrated_at?: string
+        }
+      }
+      project_updates: {
+        Row: {
+          project_name: string
+          status: string
+          last_attempted: string | null
+          last_successful: string | null
+          error: string | null
+          created_at: string
+        }
+        Insert: {
+          project_name: string
+          status?: string
+          last_attempted?: string | null
+          last_successful?: string | null
+          error?: string | null
+          created_at?: string
+        }
+        Update: {
+          project_name?: string
+          status?: string
+          last_attempted?: string | null
+          last_successful?: string | null
+          error?: string | null
+          created_at?: string
+        }
+      }
     }
   }
 }
@@ -205,6 +303,21 @@ export type Database = {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-const supabase = createClient<Database>(supabaseUrl, supabaseKey);
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase environment variables');
+}
+
+const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'codegems-client'
+    }
+  }
+});
 
 export default supabase;

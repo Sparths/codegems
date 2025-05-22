@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { Session, User } from "@supabase/supabase-js";
 
 interface AuthUser {
+  token: string;
   id: string;
   username: string;
   displayName: string;

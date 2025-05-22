@@ -1,31 +1,85 @@
 import { NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { generateUUID } from "@/lib/utils-uuid";
+import { rateLimit } from "@/lib/rate-limiter";
 
+// Input validation and sanitization
+const sanitizeInput = (input: string): string => {
+  // Remove potentially dangerous characters and trim
+  return input
+    .replace(/[<>]/g, '') // Remove < and > to prevent XSS
+    .replace(/javascript:/gi, '') // Remove javascript: protocol
+    .replace(/on\w+=/gi, '') // Remove event handlers
+    .trim();
+};
+
+const validateComment = (text: string): boolean => {
+  return text.length >= 1 && text.length <= 2000;
+};
+
+const validateProjectName = (name: string): boolean => {
+  const nameRegex = /^[a-zA-Z0-9._-]+$/;
+  return nameRegex.test(name) && name.length >= 1 && name.length <= 100;
+};
+
+const validateUserId = (userId: string): boolean => {
+  // Basic UUID/user ID validation
+  return userId.length >= 5 && userId.length <= 50;
+};
 
 // GET: Fetch comments
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const projectName = searchParams.get("project");
-  const userId = searchParams.get("userId");
-
   try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(request, 'comments');
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const projectName = searchParams.get("project");
+    const userId = searchParams.get("userId");
+
+    // Validate and sanitize inputs
+    const sanitizedProjectName = projectName ? sanitizeInput(projectName) : null;
+    const sanitizedUserId = userId ? sanitizeInput(userId) : null;
+
+    if (sanitizedProjectName && !validateProjectName(sanitizedProjectName)) {
+      return NextResponse.json(
+        { error: "Invalid project name" },
+        { status: 400 }
+      );
+    }
+
+    if (sanitizedUserId && !validateUserId(sanitizedUserId)) {
+      return NextResponse.json(
+        { error: "Invalid user ID" },
+        { status: 400 }
+      );
+    }
+
     let query = supabase.from('comments').select('*');
 
-    if (projectName) {
-      query = query.eq('project_name', projectName);
+    if (sanitizedProjectName) {
+      query = query.eq('project_name', sanitizedProjectName);
     }
 
-    if (userId) {
-      query = query.eq('user_id', userId);
+    if (sanitizedUserId) {
+      query = query.eq('user_id', sanitizedUserId);
     }
+
+    // Limit results to prevent large data dumps
+    query = query.limit(1000).order('created_at', { ascending: false });
 
     const { data: comments, error } = await query;
 
     if (error) {
       console.error("Error getting comments:", error);
       return NextResponse.json(
-        { error: `Failed to get comments: ${error.message}` },
+        { error: "Failed to get comments" },
         { status: 500 }
       );
     }
@@ -33,9 +87,8 @@ export async function GET(request: Request) {
     return NextResponse.json(comments || []);
   } catch (error) {
     console.error("Error getting comments:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: `Failed to get comments: ${errorMessage}` },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -43,31 +96,51 @@ export async function GET(request: Request) {
 
 // POST: Create a new comment
 export async function POST(request: Request) {
-  
   try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(request, 'comments');
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Too many comments. Please wait before posting again." },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { projectName, userId, text, parentId } = body;
 
-    console.log("Comment submission:", { projectName, userId, textLength: text?.length, parentId });
-
     // Validation
-    if (!projectName || !projectName.trim()) {
+    if (!projectName || !userId || !text) {
       return NextResponse.json(
-        { error: "Project name is required" },
+        { error: "Project name, user ID, and comment text are required" },
         { status: 400 }
       );
     }
 
-    if (!userId || !userId.trim()) {
+    // Sanitize inputs
+    const sanitizedProjectName = sanitizeInput(projectName);
+    const sanitizedUserId = sanitizeInput(userId);
+    const sanitizedText = sanitizeInput(text);
+    const sanitizedParentId = parentId ? sanitizeInput(parentId) : null;
+
+    // Validate inputs
+    if (!validateProjectName(sanitizedProjectName)) {
       return NextResponse.json(
-        { error: "User ID is required" },
+        { error: "Invalid project name" },
         { status: 400 }
       );
     }
 
-    if (!text || !text.trim()) {
+    if (!validateUserId(sanitizedUserId)) {
       return NextResponse.json(
-        { error: "Comment text is required" },
+        { error: "Invalid user ID" },
+        { status: 400 }
+      );
+    }
+
+    if (!validateComment(sanitizedText)) {
+      return NextResponse.json(
+        { error: "Comment must be between 1 and 2000 characters" },
         { status: 400 }
       );
     }
@@ -76,41 +149,25 @@ export async function POST(request: Request) {
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('id')
-      .eq('id', userId)
+      .eq('id', sanitizedUserId)
       .single();
 
-    if (userError) {
-      console.error("Error checking user:", userError);
+    if (userError || !user) {
       return NextResponse.json(
-        { error: `User check failed: ${userError.message}` },
-        { status: 500 }
-      );
-    }
-
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
+        { error: "User authentication failed" },
+        { status: 401 }
       );
     }
 
     // Check if parentId exists (if provided)
-    if (parentId) {
+    if (sanitizedParentId) {
       const { data: parentComment, error: parentError } = await supabase
         .from('comments')
         .select('id')
-        .eq('id', parentId)
+        .eq('id', sanitizedParentId)
         .single();
 
-      if (parentError && parentError.code !== 'PGRST116') {
-        console.error("Error checking parent comment:", parentError);
-        return NextResponse.json(
-          { error: `Parent comment check failed: ${parentError.message}` },
-          { status: 500 }
-        );
-      }
-
-      if (!parentComment) {
+      if (parentError || !parentComment) {
         return NextResponse.json(
           { error: "Parent comment not found" },
           { status: 404 }
@@ -118,15 +175,44 @@ export async function POST(request: Request) {
       }
     }
 
-    const commentId = generateUUID(); // Use UUID instead of timestamp + random string
-    console.log(`Creating comment with ID: ${commentId}`);
+    // Check for recent comments to prevent spam
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const { data: recentComments, error: recentError } = await supabase
+      .from('comments')
+      .select('id')
+      .eq('user_id', sanitizedUserId)
+      .gte('created_at', fiveMinutesAgo.toISOString());
 
+    if (recentComments && recentComments.length >= 5) {
+      return NextResponse.json(
+        { error: "Too many recent comments. Please wait before posting again." },
+        { status: 429 }
+      );
+    }
+
+    // Check for duplicate comments
+    const { data: duplicateComment, error: duplicateError } = await supabase
+      .from('comments')
+      .select('id')
+      .eq('user_id', sanitizedUserId)
+      .eq('project_name', sanitizedProjectName)
+      .eq('text', sanitizedText)
+      .gte('created_at', new Date(Date.now() - 60 * 1000).toISOString()); // Last minute
+
+    if (duplicateComment && duplicateComment.length > 0) {
+      return NextResponse.json(
+        { error: "Duplicate comment detected" },
+        { status: 400 }
+      );
+    }
+
+    const commentId = generateUUID();
     const newComment = {
       id: commentId,
-      project_name: projectName,
-      user_id: userId,
-      text: text.trim(),
-      parent_id: parentId || null,
+      project_name: sanitizedProjectName,
+      user_id: sanitizedUserId,
+      text: sanitizedText,
+      parent_id: sanitizedParentId,
       likes: [],
       created_at: new Date().toISOString(),
     };
@@ -138,77 +224,49 @@ export async function POST(request: Request) {
     if (insertError) {
       console.error("Error inserting comment:", insertError);
       return NextResponse.json(
-        { error: `Failed to create comment: ${insertError.message}` },
+        { error: "Failed to create comment" },
         { status: 500 }
       );
     }
 
-    console.log("Comment created successfully");
+    // Award points and check badges
+    try {
+      // Update user points
+      const { data: userData, error: getUserError } = await supabase
+        .from('users')
+        .select('points, badges')
+        .eq('id', sanitizedUserId)
+        .single();
 
-    // Replace the badge check portion in app/api/comments/route.tsx
-// Find the section after successfully creating a comment
+      if (!getUserError && userData) {
+        await supabase
+          .from('users')
+          .update({
+            points: (userData.points || 0) + 2
+          })
+          .eq('id', sanitizedUserId);
+      }
 
-// Award points for new comment and check badges
-try {
-  // First update the points
-  const { data: userData, error: getUserError } = await supabase
-    .from('users')
-    .select('points, badges')
-    .eq('id', userId)
-    .single();
-
-  if (getUserError) {
-    console.error("Error getting user data for points:", getUserError);
-  } else if (userData) {
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({
-        points: (userData.points || 0) + 2
-      })
-      .eq('id', userId);
-      
-    if (updateError) {
-      console.error("Error updating user points:", updateError);
-    } else {
-      console.log("User points updated successfully");
+      // Check for badges (simplified)
+      await fetch("/api/users?action=check_badges", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: sanitizedUserId,
+        }),
+      });
+    } catch (error) {
+      console.error("Error awarding points:", error);
+      // Don't fail the comment creation if points award fails
     }
-  }
-  
-  // Now check for badges
-  const badgeResponse = await fetch("/api/users?action=check_badges", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      userId: userId,
-    }),
-  });
-
-  if (badgeResponse.ok) {
-    const badgeData = await badgeResponse.json();
-    
-    if (badgeData.earnedBadges && badgeData.earnedBadges.length > 0) {
-      console.log("Badges earned:", badgeData.earnedBadges.map((b: { name: any; }) => b.name).join(", "));
-    }
-    
-    if (badgeData.levelUp) {
-      console.log(`User leveled up to level ${badgeData.currentLevel}`);
-    }
-  } else {
-    console.error("Error checking badges:", await badgeResponse.text());
-  }
-} catch (pointsError) {
-  console.error("Error awarding points/badges:", pointsError);
-  // Continue execution - points/badge award failure shouldn't stop comment submission
-}
 
     return NextResponse.json(newComment);
   } catch (error) {
     console.error("Error creating comment:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: `Failed to create comment: ${errorMessage}` },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -220,33 +278,30 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const { commentId, userId, action, text } = body;
 
-    console.log("Comment update:", { commentId, userId, action, textLength: text?.length });
-
     // Validation
-    if (!commentId || !commentId.trim()) {
+    if (!commentId || !userId || !action) {
       return NextResponse.json(
-        { error: "Comment ID is required" },
+        { error: "Comment ID, user ID, and action are required" },
         { status: 400 }
       );
     }
 
-    if (!userId || !userId.trim()) {
+    // Sanitize inputs
+    const sanitizedCommentId = sanitizeInput(commentId);
+    const sanitizedUserId = sanitizeInput(userId);
+    const sanitizedAction = sanitizeInput(action);
+    const sanitizedText = text ? sanitizeInput(text) : null;
+
+    if (!["like", "unlike", "edit"].includes(sanitizedAction)) {
       return NextResponse.json(
-        { error: "User ID is required" },
+        { error: "Invalid action" },
         { status: 400 }
       );
     }
 
-    if (!action || !["like", "unlike", "edit"].includes(action)) {
+    if (sanitizedAction === "edit" && (!sanitizedText || !validateComment(sanitizedText))) {
       return NextResponse.json(
-        { error: "Valid action is required (like, unlike, or edit)" },
-        { status: 400 }
-      );
-    }
-
-    if (action === "edit" && (!text || !text.trim())) {
-      return NextResponse.json(
-        { error: "Comment text is required for edit action" },
+        { error: "Valid comment text is required for edit action" },
         { status: 400 }
       );
     }
@@ -255,18 +310,10 @@ export async function PUT(request: Request) {
     const { data: comment, error: getCommentError } = await supabase
       .from('comments')
       .select('*')
-      .eq('id', commentId)
+      .eq('id', sanitizedCommentId)
       .single();
 
-    if (getCommentError) {
-      console.error("Error getting comment:", getCommentError);
-      return NextResponse.json(
-        { error: `Failed to get comment: ${getCommentError.message}` },
-        { status: 500 }
-      );
-    }
-
-    if (!comment) {
+    if (getCommentError || !comment) {
       return NextResponse.json(
         { error: "Comment not found" },
         { status: 404 }
@@ -275,18 +322,18 @@ export async function PUT(request: Request) {
 
     // Handle different actions
     let updates = {};
-    if (action === "like") {
+    if (sanitizedAction === "like") {
       const likes = comment.likes || [];
-      if (!likes.includes(userId)) {
-        likes.push(userId);
+      if (!likes.includes(sanitizedUserId)) {
+        likes.push(sanitizedUserId);
       }
       updates = { likes };
-    } else if (action === "unlike") {
-      const likes = (comment.likes || []).filter((id: string) => id !== userId);
+    } else if (sanitizedAction === "unlike") {
+      const likes = (comment.likes || []).filter((id: string) => id !== sanitizedUserId);
       updates = { likes };
-    } else if (action === "edit") {
-      // Verify the user is the author of the comment
-      if (comment.user_id !== userId) {
+    } else if (sanitizedAction === "edit") {
+      // Verify the user is the author
+      if (comment.user_id !== sanitizedUserId) {
         return NextResponse.json(
           { error: "Not authorized to edit this comment" },
           { status: 403 }
@@ -294,7 +341,7 @@ export async function PUT(request: Request) {
       }
       
       updates = {
-        text: text.trim(),
+        text: sanitizedText,
         edited: true,
         updated_at: new Date().toISOString()
       };
@@ -303,25 +350,23 @@ export async function PUT(request: Request) {
     const { data: updatedComment, error: updateError } = await supabase
       .from('comments')
       .update(updates)
-      .eq('id', commentId)
+      .eq('id', sanitizedCommentId)
       .select()
       .single();
 
     if (updateError) {
       console.error("Error updating comment:", updateError);
       return NextResponse.json(
-        { error: `Failed to update comment: ${updateError.message}` },
+        { error: "Failed to update comment" },
         { status: 500 }
       );
     }
 
-    console.log("Comment updated successfully");
     return NextResponse.json(updatedComment);
   } catch (error) {
     console.error("Error updating comment:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: `Failed to update comment: ${errorMessage}` },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -329,43 +374,37 @@ export async function PUT(request: Request) {
 
 // DELETE: Delete a comment
 export async function DELETE(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const commentId = searchParams.get("id");
-  const userId = searchParams.get("userId");
-
-  if (!commentId || !userId) {
-    return NextResponse.json(
-      { error: "Comment ID and User ID are required" },
-      { status: 400 }
-    );
-  }
-
   try {
-    console.log(`Attempting to delete comment: ${commentId} by user: ${userId}`);
-    
-    // Check if comment exists and if user is the author
-    const { data: comment, error: getCommentError } = await supabase
-      .from('comments')
-      .select('user_id')
-      .eq('id', commentId)
-      .single();
+    const { searchParams } = new URL(request.url);
+    const commentId = searchParams.get("id");
+    const userId = searchParams.get("userId");
 
-    if (getCommentError) {
-      console.error("Error checking comment:", getCommentError);
+    if (!commentId || !userId) {
       return NextResponse.json(
-        { error: `Failed to check comment: ${getCommentError.message}` },
-        { status: 500 }
+        { error: "Comment ID and User ID are required" },
+        { status: 400 }
       );
     }
 
-    if (!comment) {
+    // Sanitize inputs
+    const sanitizedCommentId = sanitizeInput(commentId);
+    const sanitizedUserId = sanitizeInput(userId);
+
+    // Check if comment exists and user is authorized
+    const { data: comment, error: getCommentError } = await supabase
+      .from('comments')
+      .select('user_id')
+      .eq('id', sanitizedCommentId)
+      .single();
+
+    if (getCommentError || !comment) {
       return NextResponse.json(
         { error: "Comment not found" },
         { status: 404 }
       );
     }
 
-    if (comment.user_id !== userId) {
+    if (comment.user_id !== sanitizedUserId) {
       return NextResponse.json(
         { error: "Not authorized to delete this comment" },
         { status: 403 }
@@ -376,12 +415,12 @@ export async function DELETE(request: Request) {
     const { error: deleteError } = await supabase
       .from('comments')
       .delete()
-      .eq('id', commentId);
+      .eq('id', sanitizedCommentId);
 
     if (deleteError) {
       console.error("Error deleting comment:", deleteError);
       return NextResponse.json(
-        { error: `Failed to delete comment: ${deleteError.message}` },
+        { error: "Failed to delete comment" },
         { status: 500 }
       );
     }
@@ -391,19 +430,17 @@ export async function DELETE(request: Request) {
       await supabase
         .from('comments')
         .delete()
-        .eq('parent_id', commentId);
+        .eq('parent_id', sanitizedCommentId);
     } catch (replyError) {
       console.error("Error deleting replies:", replyError);
-      // Continue execution - we've already deleted the main comment
+      // Continue execution
     }
 
-    console.log("Comment deleted successfully");
-    return NextResponse.json({ success: true, message: "Comment deleted successfully" });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting comment:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: `Failed to delete comment: ${errorMessage}` },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
