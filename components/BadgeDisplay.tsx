@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Award,
   Gift,
@@ -14,6 +14,7 @@ import {
   User,
   BookOpen,
   MessageCircle,
+  RefreshCw,
 } from "lucide-react";
 import {
   Tooltip,
@@ -21,6 +22,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 import supabase from "@/lib/supabase";
 
 interface Badge {
@@ -44,37 +46,78 @@ const BadgeDisplay: React.FC<BadgeDisplayProps> = ({
 }) => {
   const [badges, setBadges] = useState<Badge[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchBadges = useCallback(async () => {
+    console.log("Fetching badges...");
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const { data, error } = await supabase
+        .from('badges')
+        .select('*');
+      
+      if (error) {
+        console.error("Error fetching badges:", error);
+        setError(`Failed to fetch badges: ${error.message}`);
+        return;
+      }
+      
+      console.log("Badges fetched successfully:", data?.length || 0);
+      setBadges(data || []);
+    } catch (error) {
+      console.error("Error fetching badges:", error);
+      setError("Failed to fetch badges. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchBadges = async () => {
+    let isMounted = true;
+    
+    const loadBadges = async () => {
+      // Reset state when component mounts
+      setIsLoading(true);
+      setError(null);
+      setBadges([]);
+      
       try {
         const { data, error } = await supabase
           .from('badges')
           .select('*');
         
+        // Only update state if component is still mounted
+        if (!isMounted) return;
+        
         if (error) {
           console.error("Error fetching badges:", error);
+          setError(`Failed to fetch badges: ${error.message}`);
           return;
         }
         
+        console.log("Badges loaded:", data?.length || 0);
         setBadges(data || []);
       } catch (error) {
+        if (!isMounted) return;
+        
         console.error("Error fetching badges:", error);
+        setError("Failed to fetch badges. Please try again.");
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
-    fetchBadges();
-  }, []);
+    loadBadges();
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-500"></div>
-      </div>
-    );
-  }
+    // Cleanup function to prevent state updates on unmounted component
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Empty dependency array - only run on mount
 
   const getBadgeIcon = (iconName: string) => {
     const iconProps = {
@@ -117,6 +160,32 @@ const BadgeDisplay: React.FC<BadgeDisplayProps> = ({
     ? badges
     : badges.filter((badge) => userBadges.includes(badge.name));
 
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-500 mb-2"></div>
+        <p className="text-gray-400 text-sm">Loading badges...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8">
+        <p className="text-red-400 text-sm mb-4">{error}</p>
+        <Button
+          onClick={fetchBadges}
+          variant="outline"
+          size="sm"
+          className="bg-slate-700 hover:bg-slate-600 text-white border-slate-600"
+        >
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
   if (badgesToDisplay.length === 0) {
     return (
       <div className="py-4 text-center">
@@ -148,7 +217,7 @@ const BadgeDisplay: React.FC<BadgeDisplayProps> = ({
                         ? "bg-gradient-to-br from-purple-500 to-blue-500 text-white"
                         : "bg-slate-800/50 text-gray-400"
                     } 
-                    rounded-lg flex items-center justify-center transition-transform hover:scale-110
+                    rounded-lg flex items-center justify-center transition-transform hover:scale-110 cursor-pointer
                   `}
                 >
                   {getBadgeIcon(badge.icon)}

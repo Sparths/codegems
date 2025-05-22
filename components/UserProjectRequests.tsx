@@ -1,5 +1,5 @@
 // components/UserProjectRequests.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
 import {
   Card,
@@ -50,37 +50,36 @@ const UserProjectRequests = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<ProjectRequest | null>(null);
   
-// In components/UserProjectRequests.tsx - fetchRequests function
-
-const fetchRequests = async () => {
-  if (!user) return;
-  
-  setIsLoading(true);
-  setError(null);
-  
-  try {
-    console.log(`Fetching requests for user ID: ${user.id}`);
+  // Use useCallback to memoize the function
+  const fetchRequests = useCallback(async () => {
+    if (!user) return;
     
-    const response = await fetch(`/api/project-requests?userId=${encodeURIComponent(user.id)}`);
-    if (!response.ok) {
-      throw new Error(`Error fetching requests: ${response.status}`);
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      console.log(`Fetching requests for user ID: ${user.id}`);
+      
+      const response = await fetch(`/api/project-requests?userId=${encodeURIComponent(user.id)}`);
+      if (!response.ok) {
+        throw new Error(`Error fetching requests: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log(`Received ${data.length} project requests for user`, data);
+      
+      setRequests(data);
+    } catch (err) {
+      console.error('Error fetching project requests:', err);
+      setError('Failed to load your project requests. Please try again later.');
+    } finally {
+      setIsLoading(false);
     }
-    
-    const data = await response.json();
-    console.log(`Received ${data.length} project requests for user`, data);
-    
-    setRequests(data);
-  } catch (err) {
-    console.error('Error fetching project requests:', err);
-    setError('Failed to load your project requests. Please try again later.');
-  } finally {
-    setIsLoading(false);
-  }
-};
+  }, [user]); // Only depend on user
   
   useEffect(() => {
     fetchRequests();
-  }, [user, fetchRequests]);
+  }, [fetchRequests]); // Now this is safe because fetchRequests is memoized
   
   const getStatusBadge = (status: string) => {
     switch (status) {
