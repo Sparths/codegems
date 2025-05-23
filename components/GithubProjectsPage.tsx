@@ -89,6 +89,13 @@ interface SubmissionStatus {
   message: string;
 }
 
+interface ValidationErrors {
+  title?: string;
+  githubLink?: string;
+  description?: string;
+  reason?: string;
+}
+
 const languageColors: { [key: string]: string } = {
   Ada: "#02f88c",
   Assembly: "#6E4C13",
@@ -257,8 +264,9 @@ export default function GithubProjectsPage() {
   });
   const [sortBy, setSortBy] = useState<SortOption>("none");
   const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
 
   const projectsPerPage = 9;
@@ -321,18 +329,71 @@ export default function GithubProjectsPage() {
   );
   const totalPages = Math.ceil(filteredProjects.length / projectsPerPage);
 
+  // Validation function
+  const validateForm = (): boolean => {
+    const errors: ValidationErrors = {};
 
+    // Title validation
+    if (!projectRequest.title.trim()) {
+      errors.title = "Title is required";
+    } else if (projectRequest.title.length < 3) {
+      errors.title = "Title must be at least 3 characters long";
+    } else if (projectRequest.title.length > 100) {
+      errors.title = "Title must be no more than 100 characters long";
+    }
+
+    // GitHub link validation
+    if (!projectRequest.githubLink.trim()) {
+      errors.githubLink = "GitHub link is required";
+    } else {
+      const githubRegex = /^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/?$/;
+      if (!githubRegex.test(projectRequest.githubLink)) {
+        errors.githubLink = "Please enter a valid GitHub repository URL (e.g., https://github.com/owner/repo)";
+      }
+    }
+
+    // Description validation
+    if (!projectRequest.description.trim()) {
+      errors.description = "Description is required";
+    } else if (projectRequest.description.length < 10) {
+      errors.description = "Description must be at least 10 characters long";
+    } else if (projectRequest.description.length > 1000) {
+      errors.description = "Description must be no more than 1000 characters long";
+    }
+
+    // Reason validation
+    if (!projectRequest.reason.trim()) {
+      errors.reason = "Reason is required";
+    } else if (projectRequest.reason.length < 10) {
+      errors.reason = "Reason must be at least 10 characters long";
+    } else if (projectRequest.reason.length > 1000) {
+      errors.reason = "Reason must be no more than 1000 characters long";
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleProjectRequest = async () => {
-    if (
-      !projectRequest.title.trim() ||
-      !projectRequest.githubLink.trim() ||
-      !projectRequest.description.trim() ||
-      !projectRequest.reason.trim()
-    ) {
+    // Check if user is authenticated first
+    if (!isAuthenticated || !user) {
+      toast({
+        title: "Sign in required",
+        description: "You need to be signed in to submit projects.",
+        variant: "destructive",
+      });
+      setShowAuthDialog(true);
+      return;
+    }
+
+    // Clear previous submission status
+    setSubmissionStatus({ status: "", message: "" });
+
+    // Validate form
+    if (!validateForm()) {
       setSubmissionStatus({
         status: "error",
-        message: "Please fill in all fields before submitting",
+        message: "Please fix the errors below and try again.",
       });
       return;
     }
@@ -341,6 +402,11 @@ export default function GithubProjectsPage() {
   };
 
   const handleFinalSubmit = async () => {
+    if (!isAuthenticated || !user) {
+      setShowAuthDialog(true);
+      return;
+    }
+
     try {
       setSubmissionStatus({
         status: "loading",
@@ -349,30 +415,53 @@ export default function GithubProjectsPage() {
 
       const response = await fetch("/api/project-requests", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(projectRequest),
+        headers: { 
+          "Content-Type": "application/json",
+          ...(user.token && { "Authorization": `Bearer ${user.token}` })
+        },
+        body: JSON.stringify({
+          ...projectRequest,
+          userId: user.id,
+        }),
       });
 
-      if (!response.ok) throw new Error("Failed to submit request");
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(responseData.error || "Failed to submit request");
+      }
 
       setSubmissionStatus({
         status: "success",
-        message:
-          "Thank you for contributing to the community! Your submission will be reviewed shortly.",
+        message: "Thank you for contributing to the community! Your submission will be reviewed shortly.",
       });
 
+      // Reset form
       setProjectRequest({
         title: "",
         githubLink: "",
         description: "",
         reason: "",
       });
+      setValidationErrors({});
+      
+      toast({
+        title: "Project submitted successfully!",
+        description: "Your project request has been received and will be reviewed by our team.",
+      });
+
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to submit project request. Please try again.";
       setSubmissionStatus({
         status: "error",
-        message: "Failed to submit project request. Please try again.",
+        message: errorMessage,
       });
-      console.error("Failed to submit project request:", error);
+      
+      toast({
+        title: "Submission failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
     }
   };
 
@@ -560,56 +649,106 @@ export default function GithubProjectsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Input
-                  placeholder="Project Title"
-                  value={projectRequest.title}
-                  onChange={(e) =>
-                    setProjectRequest((prev) => ({
-                      ...prev,
-                      title: e.target.value,
-                    }))
-                  }
-                  className="bg-slate-800/50 border-slate-700 text-white placeholder:text-gray-400"
-                />
-
-                <div className="flex items-center gap-2">
-                  <Github className="text-white" />
+                <div className="space-y-2">
                   <Input
-                    placeholder="GitHub Link"
-                    value={projectRequest.githubLink}
-                    onChange={(e) =>
+                    placeholder="Project Title"
+                    value={projectRequest.title}
+                    onChange={(e) => {
                       setProjectRequest((prev) => ({
                         ...prev,
-                        githubLink: e.target.value,
-                      }))
-                    }
-                    className="bg-slate-800/50 border-slate-700 text-white placeholder:text-gray-400"
+                        title: e.target.value,
+                      }));
+                      // Clear error when user starts typing
+                      if (validationErrors.title) {
+                        setValidationErrors(prev => ({ ...prev, title: undefined }));
+                      }
+                    }}
+                    className={`bg-slate-800/50 border-slate-700 text-white placeholder:text-gray-400 ${
+                      validationErrors.title ? "border-red-500" : ""
+                    }`}
                   />
+                  {validationErrors.title && (
+                    <p className="text-red-400 text-sm">{validationErrors.title}</p>
+                  )}
                 </div>
 
-                <Textarea
-                  placeholder="What is this project about?"
-                  value={projectRequest.description}
-                  onChange={(e) =>
-                    setProjectRequest((prev) => ({
-                      ...prev,
-                      description: e.target.value,
-                    }))
-                  }
-                  className="bg-slate-800/50 border-slate-700 text-white placeholder:text-gray-400"
-                />
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Github className="text-white" />
+                    <Input
+                      placeholder="GitHub Link (e.g., https://github.com/owner/repo)"
+                      value={projectRequest.githubLink}
+                      onChange={(e) => {
+                        setProjectRequest((prev) => ({
+                          ...prev,
+                          githubLink: e.target.value,
+                        }));
+                        // Clear error when user starts typing
+                        if (validationErrors.githubLink) {
+                          setValidationErrors(prev => ({ ...prev, githubLink: undefined }));
+                        }
+                      }}
+                      className={`bg-slate-800/50 border-slate-700 text-white placeholder:text-gray-400 ${
+                        validationErrors.githubLink ? "border-red-500" : ""
+                      }`}
+                    />
+                  </div>
+                  {validationErrors.githubLink && (
+                    <p className="text-red-400 text-sm">{validationErrors.githubLink}</p>
+                  )}
+                </div>
 
-                <Textarea
-                  placeholder="Why do you think this is a good project?"
-                  value={projectRequest.reason}
-                  onChange={(e) =>
-                    setProjectRequest((prev) => ({
-                      ...prev,
-                      reason: e.target.value,
-                    }))
-                  }
-                  className="bg-slate-800/50 border-slate-700 text-white placeholder:text-gray-400"
-                />
+                <div className="space-y-2">
+                  <Textarea
+                    placeholder="What is this project about? (minimum 10 characters)"
+                    value={projectRequest.description}
+                    onChange={(e) => {
+                      setProjectRequest((prev) => ({
+                        ...prev,
+                        description: e.target.value,
+                      }));
+                      // Clear error when user starts typing
+                      if (validationErrors.description) {
+                        setValidationErrors(prev => ({ ...prev, description: undefined }));
+                      }
+                    }}
+                    className={`bg-slate-800/50 border-slate-700 text-white placeholder:text-gray-400 ${
+                      validationErrors.description ? "border-red-500" : ""
+                    }`}
+                  />
+                  {validationErrors.description && (
+                    <p className="text-red-400 text-sm">{validationErrors.description}</p>
+                  )}
+                  <p className="text-gray-500 text-xs">
+                    {projectRequest.description.length}/1000 characters
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Textarea
+                    placeholder="Why do you think this is a good project? (minimum 10 characters)"
+                    value={projectRequest.reason}
+                    onChange={(e) => {
+                      setProjectRequest((prev) => ({
+                        ...prev,
+                        reason: e.target.value,
+                      }));
+                      // Clear error when user starts typing
+                      if (validationErrors.reason) {
+                        setValidationErrors(prev => ({ ...prev, reason: undefined }));
+                      }
+                    }}
+                    className={`bg-slate-800/50 border-slate-700 text-white placeholder:text-gray-400 ${
+                      validationErrors.reason ? "border-red-500" : ""
+                    }`}
+                  />
+                  {validationErrors.reason && (
+                    <p className="text-red-400 text-sm">{validationErrors.reason}</p>
+                  )}
+                  <p className="text-gray-500 text-xs">
+                    {projectRequest.reason.length}/1000 characters
+                  </p>
+                </div>
 
                 {submissionStatus.status && (
                   <Alert
@@ -634,12 +773,14 @@ export default function GithubProjectsPage() {
                     </AlertDescription>
                   </Alert>
                 )}
+                
                 <Button
                   onClick={handleProjectRequest}
                   className="bg-purple-500 hover:bg-purple-600 text-white w-full flex items-center justify-center gap-2"
+                  disabled={submissionStatus.status === "loading"}
                 >
                   <Share2 className="w-4 h-4" />
-                  Submit
+                  {submissionStatus.status === "loading" ? "Submitting..." : "Submit"}
                 </Button>
 
                 <div className="flex items-center justify-center gap-4 mt-4">
@@ -681,7 +822,7 @@ export default function GithubProjectsPage() {
                   <Check className="text-green-500 mt-1" />
                   <p>
                     Include detailed descriptions to help others understand the
-                    projects value
+                    project's value
                   </p>
                 </div>
                 <div className="flex items-start gap-2">
@@ -700,7 +841,7 @@ export default function GithubProjectsPage() {
                     <li className="flex items-start gap-2">
                       <Check className="text-green-500 mt-1" />
                       <p>
-                        Clear description of the projects purpose and benefits
+                        Clear description of the project's purpose and benefits
                       </p>
                     </li>
                     <li className="flex items-start gap-2">
@@ -732,7 +873,7 @@ export default function GithubProjectsPage() {
             </AlertDialogTitle>
             <AlertDialogDescription className="text-gray-300 space-y-4">
               <p>
-                Dont miss updates about your submission! Join our vibrant
+                Don't miss updates about your submission! Join our vibrant
                 Discord community to:
               </p>
               <ul className="space-y-2">
