@@ -1,13 +1,33 @@
+// =================================
 // app/api/projects/update/route.tsx
+// =================================
+
 import { NextResponse } from 'next/server';
 import { processProjectUpdates, getUpdateStatus } from '@/lib/project-updater';
 import supabase from '@/lib/supabase';
+import { rateLimit, createRateLimitHeaders } from "@/lib/security/rate-limiter-config";
+import { sanitizeInput } from "@/lib/security/sanitization";
 
 /**
  * GET: Get the status of the project update system
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(request, 'default');
+    if (!rateLimitResult.success) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Too many requests. Please try again later.' }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            ...createRateLimitHeaders(rateLimitResult),
+          }
+        }
+      );
+    }
+
     // Get the current status
     const status = getUpdateStatus();
     
@@ -59,6 +79,8 @@ export async function GET() {
       },
       statistics: updateCounts || { pending: 0, in_progress: 0, completed: 0, failed: 0, total: 0 },
       projectsNeedingUpdate: needsUpdateCount || 0
+    }, {
+      headers: createRateLimitHeaders(rateLimitResult)
     });
   } catch (error) {
     console.error("Error getting update status:", error);
@@ -74,11 +96,31 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(request, 'default');
+    if (!rateLimitResult.success) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Too many requests. Please try again later.' }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            ...createRateLimitHeaders(rateLimitResult),
+          }
+        }
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
-    const batchSize = body.batchSize || 5;
+    let batchSize = body.batchSize || 5;
+    
+    // Sanitize batch size
+    if (typeof batchSize === 'string') {
+      batchSize = parseInt(sanitizeInput(batchSize), 10) || 5;
+    }
     
     // Don't allow batches larger than 10
-    const safeBatchSize = Math.min(10, batchSize);
+    const safeBatchSize = Math.min(10, Math.max(1, batchSize));
     
     // Process the updates
     const result = await processProjectUpdates(safeBatchSize);
@@ -91,6 +133,8 @@ export async function POST(request: Request) {
       processedCount: result.processedCount,
       rateLimitRemaining: result.rateLimitRemaining,
       nextReset: result.nextReset?.toISOString()
+    }, {
+      headers: createRateLimitHeaders(rateLimitResult)
     });
   } catch (error) {
     console.error("Error processing project updates:", error);

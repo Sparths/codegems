@@ -1,6 +1,7 @@
 // lib/security-headers.ts
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
+import React from 'react';
 
 // Generate nonce for CSP
 export function generateNonce(): string {
@@ -101,15 +102,13 @@ export function getSecurityHeadersForRoute(pathname: string): Record<string, str
 }
 
 // React component to inject CSP nonce
-export function SecurityHeaders({ nonce }: { nonce: string }) {
-  return (
-    <script
-      nonce={nonce}
-      dangerouslySetInnerHTML={{
-        __html: `window.__CSP_NONCE__ = '${nonce}';`
-      }}
-    />
-  );
+export function SecurityHeaders({ nonce }: { nonce: string }): React.ReactElement {
+  return React.createElement('script', {
+    nonce: nonce,
+    dangerouslySetInnerHTML: {
+      __html: `window.__CSP_NONCE__ = '${nonce}';`
+    }
+  });
 }
 
 // Helper to get nonce in client components
