@@ -822,7 +822,7 @@ export default function GithubProjectsPage() {
                   <Check className="text-green-500 mt-1" />
                   <p>
                     Include detailed descriptions to help others understand the
-                    project's value
+                    project&apos;s value
                   </p>
                 </div>
                 <div className="flex items-start gap-2">
@@ -841,7 +841,7 @@ export default function GithubProjectsPage() {
                     <li className="flex items-start gap-2">
                       <Check className="text-green-500 mt-1" />
                       <p>
-                        Clear description of the project's purpose and benefits
+                        Clear description of the project&apos;s purpose and benefits
                       </p>
                     </li>
                     <li className="flex items-start gap-2">
@@ -873,7 +873,7 @@ export default function GithubProjectsPage() {
             </AlertDialogTitle>
             <AlertDialogDescription className="text-gray-300 space-y-4">
               <p>
-                Don't miss updates about your submission! Join our vibrant
+                Don&apos;t miss updates about your submission! Join our vibrant
                 Discord community to:
               </p>
               <ul className="space-y-2">
