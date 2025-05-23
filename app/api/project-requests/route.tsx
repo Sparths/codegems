@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { generateUUID } from "@/lib/utils-uuid";
 import { createClient } from '@supabase/supabase-js';
-import { rateLimit } from "@/lib/rate-limiter";
+import { sanitizeInput, sanitizeURL } from "@/lib/security/sanitization";
+import { verifySecureAdminToken } from "@/lib/security/secure-token";
 
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
@@ -13,14 +14,13 @@ const adminSupabase = supabaseServiceKey ?
   createClient(supabaseUrl, supabaseServiceKey) : 
   supabase;
 
-// Input validation helpers
-const sanitizeInput = (input: string): string => {
-  return input.replace(/[<>]/g, '').trim();
-};
-
+// Enhanced validation functions
 const validateGitHubUrl = (url: string): boolean => {
+  const sanitizedUrl = sanitizeURL(url);
+  if (!sanitizedUrl) return false;
+  
   const githubRegex = /^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/?$/;
-  return githubRegex.test(url);
+  return githubRegex.test(sanitizedUrl);
 };
 
 const validateTitle = (title: string): boolean => {
@@ -35,38 +35,39 @@ const validateReason = (reason: string): boolean => {
   return reason.length >= 10 && reason.length <= 1000;
 };
 
-// Simple admin verification for tokens
+// Secure admin verification
 const verifyAdminAccess = async (request: Request): Promise<{
   isValid: boolean;
   user?: { id: string };
+  error?: string;
 }> => {
-  // This is a simplified version - in production you'd want proper verification  
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return { isValid: false };
+      return { isValid: false, error: 'Missing authorization header' };
     }
 
-
-    // For legacy users with actual tokens, you'd verify the JWT here
-    // For now, we'll return false to force admin token usage
-    return { isValid: false };
-  } catch {
-    return { isValid: false };
+    const token = authHeader.substring(7);
+    
+    // Verify admin token using secure method
+    const verification = verifySecureAdminToken(token);
+    
+    if (!verification.isValid) {
+      return { isValid: false, error: verification.error || 'Invalid token' };
+    }
+    
+    return { 
+      isValid: true, 
+      user: { id: verification.userId! }
+    };
+  } catch (error) {
+    console.error("Admin verification error:", error);
+    return { isValid: false, error: 'Verification failed' };
   }
 };
 
 export async function POST(request: Request) {
   try {
-    // Apply rate limiting
-    const rateLimitResult = await rateLimit(request, 'project_requests');
-    if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: "Too many project submissions. Please try again later." },
-        { status: 429 }
-      );
-    }
-
     const body = await request.json();
     const { title, githubLink, description, reason, userId } = body;
 
@@ -78,9 +79,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Sanitize inputs
+    // Sanitize inputs with enhanced sanitization
     const sanitizedTitle = sanitizeInput(title);
-    const sanitizedGithubLink = sanitizeInput(githubLink);
+    const sanitizedGithubLink = sanitizeURL(githubLink) || '';
     const sanitizedDescription = sanitizeInput(description);
     const sanitizedReason = sanitizeInput(reason);
     const sanitizedUserId = sanitizeInput(userId);
@@ -143,7 +144,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check recent submissions to prevent spam
+    // Check recent submissions to prevent spam with per-user rate limiting
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const { data: recentRequests } = await supabase
       .from('project_requests')
@@ -183,7 +184,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Send to Discord (if webhook is configured)
+    // Send to Discord (if webhook is configured) - in try-catch to not fail main request
     if (DISCORD_WEBHOOK_URL) {
       try {
         const discordMessage = {
@@ -269,53 +270,12 @@ export async function GET(request: Request) {
       // For admin requests, verify the admin token
       console.log("Admin request detected");
       
-      const authHeader = request.headers.get('authorization');
-      
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      const adminVerification = await verifyAdminAccess(request);
+      if (!adminVerification.isValid) {
         return NextResponse.json(
-          { error: "Admin authorization required" },
-          { status: 401 }
+          { error: adminVerification.error || "Admin access required" },
+          { status: 403 }
         );
-      }
-      
-      const token = authHeader.substring(7);
-      
-      // Verify admin token
-      let adminUserId = null;
-      try {
-        // Try to decode admin token first
-        const decoded = Buffer.from(token, 'base64').toString('utf-8');
-        const tokenData = JSON.parse(decoded);
-        
-        // Check if it's a valid admin token (not expired, has admin flag)
-        if (tokenData.isAdmin && tokenData.userId && tokenData.timestamp) {
-          const tokenAge = Date.now() - tokenData.timestamp;
-          const oneHour = 60 * 60 * 1000;
-          
-          if (tokenAge < oneHour) { // Token valid for 1 hour
-            adminUserId = tokenData.userId;
-            console.log("Valid admin token for user:", adminUserId);
-          } else {
-            console.log("Admin token expired");
-            return NextResponse.json(
-              { error: "Admin token expired" },
-              { status: 401 }
-            );
-          }
-        } else {
-          throw new Error("Not an admin token");
-        }
-      } catch {
-        // If admin token fails, try legacy admin verification
-        console.log("Admin token failed, trying legacy verification");
-        const adminVerification = await verifyAdminAccess(request as Request);
-        if (!adminVerification.isValid) {
-          return NextResponse.json(
-            { error: "Admin access required" },
-            { status: 403 }
-          );
-        }
-        adminUserId = adminVerification.user?.id;
       }
 
       console.log("Admin verification passed, fetching all requests");
@@ -403,54 +363,13 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Verify admin access using the same token logic as GET
-    const authHeader = request.headers.get('authorization');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Verify admin access using secure token
+    const adminVerification = await verifyAdminAccess(request);
+    if (!adminVerification.isValid) {
       return NextResponse.json(
-        { error: "Admin authorization required" },
-        { status: 401 }
+        { error: adminVerification.error || "Admin access required" },
+        { status: 403 }
       );
-    }
-    
-    const token = authHeader.substring(7);
-    
-    // Verify admin token
-    let adminUserId = null;
-    try {
-      // Try to decode admin token first
-      const decoded = Buffer.from(token, 'base64').toString('utf-8');
-      const tokenData = JSON.parse(decoded);
-      
-      // Check if it's a valid admin token (not expired, has admin flag)
-      if (tokenData.isAdmin && tokenData.userId && tokenData.timestamp) {
-        const tokenAge = Date.now() - tokenData.timestamp;
-        const oneHour = 60 * 60 * 1000;
-        
-        if (tokenAge < oneHour) { // Token valid for 1 hour
-          adminUserId = tokenData.userId;
-          console.log("Valid admin token for user:", adminUserId);
-        } else {
-          console.log("Admin token expired");
-          return NextResponse.json(
-            { error: "Admin token expired" },
-            { status: 401 }
-          );
-        }
-      } else {
-        throw new Error("Not an admin token");
-      }
-    } catch {
-      // If admin token fails, try legacy admin verification
-      console.log("Admin token failed, trying legacy verification");
-      const adminVerification = await verifyAdminAccess(request as Request);
-      if (!adminVerification.isValid) {
-        return NextResponse.json(
-          { error: "Admin access required" },
-          { status: 403 }
-        );
-      }
-      adminUserId = adminVerification.user?.id;
     }
 
     // Sanitize inputs

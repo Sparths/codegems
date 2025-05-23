@@ -1,6 +1,8 @@
+// app/api/badges/route.tsx
 import { NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
-
+import { rateLimit, createRateLimitHeaders } from "@/lib/security/rate-limiter-config";
+import { sanitizeInput } from "@/lib/security/sanitization";
 
 
 const defaultBadges = [
@@ -268,10 +270,26 @@ interface BadgeUpdate {
 
 // GET: Get all badges or a specific badge
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const badgeName = searchParams.get("name"); // Changed from badgeId to badgeName
-
   try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(request, 'default');
+    if (!rateLimitResult.success) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Too many requests. Please try again later.' }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            ...createRateLimitHeaders(rateLimitResult),
+          }
+        }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const badgeName = searchParams.get("name");
+    const sanitizedBadgeName = badgeName ? sanitizeInput(badgeName) : null;
+
     // Check if badges table is empty
     const { data: badgesCount, error: countError } = await supabase
       .from('badges')
@@ -287,24 +305,35 @@ export async function GET(request: Request) {
         console.error("Error creating default badges:", insertError);
         return NextResponse.json(
           { error: "Failed to create default badges" },
-          { status: 500 }
+          { 
+            status: 500,
+            headers: createRateLimitHeaders(rateLimitResult)
+          }
         );
       }
     }
 
-    if (badgeName) {
-      // Get a specific badge by name instead of id
+    if (sanitizedBadgeName) {
+      // Get a specific badge by name
       const { data: badge, error } = await supabase
         .from('badges')
         .select('*')
-        .eq('name', badgeName) // Changed from 'id' to 'name'
+        .eq('name', sanitizedBadgeName)
         .single();
       
       if (error || !badge) {
-        return NextResponse.json({ error: "Badge not found" }, { status: 404 });
+        return NextResponse.json(
+          { error: "Badge not found" }, 
+          { 
+            status: 404,
+            headers: createRateLimitHeaders(rateLimitResult)
+          }
+        );
       }
       
-      return NextResponse.json(badge);
+      return NextResponse.json(badge, {
+        headers: createRateLimitHeaders(rateLimitResult)
+      });
     }
 
     // Get all badges
@@ -315,11 +344,16 @@ export async function GET(request: Request) {
     if (error) {
       return NextResponse.json(
         { error: "Failed to get badges" },
-        { status: 500 }
+        { 
+          status: 500,
+          headers: createRateLimitHeaders(rateLimitResult)
+        }
       );
     }
     
-    return NextResponse.json(badges);
+    return NextResponse.json(badges, {
+      headers: createRateLimitHeaders(rateLimitResult)
+    });
   } catch (error) {
     console.error("Error getting badges:", error);
     return NextResponse.json(
@@ -332,27 +366,65 @@ export async function GET(request: Request) {
 // POST: Create a new badge (for admin purposes)
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { id, name, description, icon, points } = body;
-
-    if (!id || !name || !description || !icon || !points) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(request, 'default');
+    if (!rateLimitResult.success) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Too many requests. Please try again later.' }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            ...createRateLimitHeaders(rateLimitResult),
+          }
+        }
       );
     }
 
-    // Check if badge with this name already exists (changed from ID)
+    const body = await request.json();
+    const { id, name, description, icon, points } = body;
+
+    // Sanitize inputs
+    const sanitizedId = sanitizeInput(id);
+    const sanitizedName = sanitizeInput(name);
+    const sanitizedDescription = sanitizeInput(description);
+    const sanitizedIcon = sanitizeInput(icon);
+
+    if (!sanitizedId || !sanitizedName || !sanitizedDescription || !sanitizedIcon || !points) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { 
+          status: 400,
+          headers: createRateLimitHeaders(rateLimitResult)
+        }
+      );
+    }
+
+    // Validate points is a number
+    if (typeof points !== 'number' || points < 0) {
+      return NextResponse.json(
+        { error: "Points must be a positive number" },
+        { 
+          status: 400,
+          headers: createRateLimitHeaders(rateLimitResult)
+        }
+      );
+    }
+
+    // Check if badge with this name already exists
     const { data: existingBadge } = await supabase
       .from('badges')
       .select('name')
-      .eq('name', name) // Changed from 'id' to 'name'
+      .eq('name', sanitizedName)
       .single();
 
     if (existingBadge) {
       return NextResponse.json(
-        { error: "Badge with this name already exists" }, // Updated error message
-        { status: 400 }
+        { error: "Badge with this name already exists" },
+        { 
+          status: 400,
+          headers: createRateLimitHeaders(rateLimitResult)
+        }
       );
     }
 
@@ -360,21 +432,28 @@ export async function POST(request: Request) {
     const { error } = await supabase
       .from('badges')
       .insert({
-        id,
-        name,
-        description,
-        icon,
+        id: sanitizedId,
+        name: sanitizedName,
+        description: sanitizedDescription,
+        icon: sanitizedIcon,
         points
       });
 
     if (error) {
+      console.error("Error creating badge:", error);
       return NextResponse.json(
         { error: "Failed to create badge" },
-        { status: 500 }
+        { 
+          status: 500,
+          headers: createRateLimitHeaders(rateLimitResult)
+        }
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json(
+      { success: true },
+      { headers: createRateLimitHeaders(rateLimitResult) }
+    );
   } catch (error) {
     console.error("Error creating badge:", error);
     return NextResponse.json(
@@ -387,13 +466,33 @@ export async function POST(request: Request) {
 // PUT: Update an existing badge
 export async function PUT(request: Request) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(request, 'default');
+    if (!rateLimitResult.success) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Too many requests. Please try again later.' }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            ...createRateLimitHeaders(rateLimitResult),
+          }
+        }
+      );
+    }
+
     const body = await request.json();
     const { id, name, description, icon, points } = body;
 
-    if (!name) { // Changed from requiring id to requiring name
+    const sanitizedName = sanitizeInput(name);
+
+    if (!sanitizedName) {
       return NextResponse.json(
         { error: "Badge name is required" },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: createRateLimitHeaders(rateLimitResult)
+        }
       );
     }
 
@@ -401,34 +500,47 @@ export async function PUT(request: Request) {
     const { data: existingBadge, error: getError } = await supabase
       .from('badges')
       .select('*')
-      .eq('name', name) // Changed from 'id' to 'name'
+      .eq('name', sanitizedName)
       .single();
 
     if (getError || !existingBadge) {
-      return NextResponse.json({ error: "Badge not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Badge not found" }, 
+        { 
+          status: 404,
+          headers: createRateLimitHeaders(rateLimitResult)
+        }
+      );
     }
 
     // Prepare update object
     const updates: BadgeUpdate = {};
-    if (id) updates.id = id; // Now id can be updated
-    if (description) updates.description = description;
-    if (icon) updates.icon = icon;
-    if (points) updates.points = points;
+    if (id) updates.id = sanitizeInput(id);
+    if (description) updates.description = sanitizeInput(description);
+    if (icon) updates.icon = sanitizeInput(icon);
+    if (points && typeof points === 'number' && points >= 0) updates.points = points;
 
-    // Update badge by name instead of id
+    // Update badge by name
     const { error: updateError } = await supabase
       .from('badges')
       .update(updates)
-      .eq('name', name); // Changed from 'id' to 'name'
+      .eq('name', sanitizedName);
 
     if (updateError) {
+      console.error("Error updating badge:", updateError);
       return NextResponse.json(
         { error: "Failed to update badge" },
-        { status: 500 }
+        { 
+          status: 500,
+          headers: createRateLimitHeaders(rateLimitResult)
+        }
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json(
+      { success: true },
+      { headers: createRateLimitHeaders(rateLimitResult) }
+    );
   } catch (error) {
     console.error("Error updating badge:", error);
     return NextResponse.json(
@@ -440,30 +552,56 @@ export async function PUT(request: Request) {
 
 // DELETE: Remove a badge
 export async function DELETE(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const badgeName = searchParams.get("name"); // Changed from badgeId to badgeName
-
-  if (!badgeName) {
-    return NextResponse.json(
-      { error: "Badge name is required" }, // Updated error message
-      { status: 400 }
-    );
-  }
-
   try {
-    const { error } = await supabase
-      .from('badges')
-      .delete()
-      .eq('name', badgeName); // Changed from 'id' to 'name'
-
-    if (error) {
-      return NextResponse.json(
-        { error: "Failed to delete badge" },
-        { status: 500 }
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(request, 'default');
+    if (!rateLimitResult.success) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Too many requests. Please try again later.' }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            ...createRateLimitHeaders(rateLimitResult),
+          }
+        }
       );
     }
 
-    return NextResponse.json({ success: true });
+    const { searchParams } = new URL(request.url);
+    const badgeName = searchParams.get("name");
+    const sanitizedBadgeName = badgeName ? sanitizeInput(badgeName) : null;
+
+    if (!sanitizedBadgeName) {
+      return NextResponse.json(
+        { error: "Badge name is required" },
+        { 
+          status: 400,
+          headers: createRateLimitHeaders(rateLimitResult)
+        }
+      );
+    }
+
+    const { error } = await supabase
+      .from('badges')
+      .delete()
+      .eq('name', sanitizedBadgeName);
+
+    if (error) {
+      console.error("Error deleting badge:", error);
+      return NextResponse.json(
+        { error: "Failed to delete badge" },
+        { 
+          status: 500,
+          headers: createRateLimitHeaders(rateLimitResult)
+        }
+      );
+    }
+
+    return NextResponse.json(
+      { success: true },
+      { headers: createRateLimitHeaders(rateLimitResult) }
+    );
   } catch (error) {
     console.error("Error deleting badge:", error);
     return NextResponse.json(
@@ -472,3 +610,5 @@ export async function DELETE(request: Request) {
     );
   }
 }
+
+
