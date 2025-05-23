@@ -1,4 +1,4 @@
-// lib/security-headers.ts
+// lib/security/security-headers.ts - Updated version
 import { NextRequest, NextResponse } from 'next/server';
 import React from 'react';
 
@@ -18,23 +18,27 @@ export function applySecurityHeaders(
   // Generate CSP nonce if not provided
   const cspNonce = nonce || generateNonce();
   
-  // Content Security Policy - Strict
+  // Content Security Policy - More lenient for development
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
   const csp = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${cspNonce}' https://cdnjs.cloudflare.com https://va.vercel-scripts.com`,
-    "style-src 'self' 'unsafe-inline'", // Unfortunately needed for Tailwind
+    isDevelopment 
+      ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' 'nonce-${cspNonce}' https://cdnjs.cloudflare.com https://va.vercel-scripts.com https://vercel.live`
+      : `script-src 'self' 'nonce-${cspNonce}' https://cdnjs.cloudflare.com https://va.vercel-scripts.com`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", 
     "img-src 'self' data: https: blob:",
-    "font-src 'self' data:",
-    "connect-src 'self' https://api.github.com https://*.supabase.co wss://*.supabase.co https://vitals.vercel-insights.com",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "connect-src 'self' https://api.github.com https://*.supabase.co wss://*.supabase.co https://vitals.vercel-insights.com https://vercel.live",
     "frame-src 'none'",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "upgrade-insecure-requests",
+    isDevelopment ? "" : "upgrade-insecure-requests",
     "block-all-mixed-content",
     "manifest-src 'self'"
-  ].join('; ');
+  ].filter(Boolean).join('; ');
   
   response.headers.set('Content-Security-Policy', csp);
   
@@ -47,8 +51,8 @@ export function applySecurityHeaders(
   response.headers.set('X-Download-Options', 'noopen');
   response.headers.set('X-Permitted-Cross-Domain-Policies', 'none');
   
-  // Strict Transport Security (HSTS)
-  if (process.env.NODE_ENV === 'production') {
+  // Strict Transport Security (HSTS) - only in production
+  if (!isDevelopment) {
     response.headers.set(
       'Strict-Transport-Security',
       'max-age=31536000; includeSubDomains; preload'
@@ -102,7 +106,7 @@ export function getSecurityHeadersForRoute(pathname: string): Record<string, str
   return baseHeaders;
 }
 
-// React component to inject CSP nonce
+// React component to inject CSP nonce - Updated
 export function SecurityHeaders({ nonce }: { nonce: string }): React.ReactElement {
   return React.createElement('script', {
     nonce: nonce,

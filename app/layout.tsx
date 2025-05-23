@@ -1,3 +1,4 @@
+// app/layout.tsx - Updated version
 import "./globals.css";
 import type { Metadata } from "next";
 import { SavedProvider } from "./saved/SavedContext";
@@ -9,6 +10,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import DiscordPromo from "@/components/DiscordPromo";
 import ProjectUpdaterWorker from "@/components/ProjectUpdaterWorker";
+import { headers } from "next/headers";
 
 export const metadata: Metadata = {
   title: "Code Gems - Discover Remarkable GitHub Projects",
@@ -70,15 +72,27 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Get the CSP nonce from headers
+  const headersList = await headers();
+  const nonce = headersList.get('X-CSP-Nonce') || undefined;
+
   return (
     <html lang="en">
       <head>
         <link rel="canonical" href="https://codegems.xyz" />
+        {nonce && (
+          <script
+            nonce={nonce}
+            dangerouslySetInnerHTML={{
+              __html: `window.__CSP_NONCE__ = '${nonce}';`
+            }}
+          />
+        )}
       </head>
       <body>
         <AuthProvider>

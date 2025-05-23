@@ -1,12 +1,16 @@
-// middleware.ts
+// middleware.ts - Updated version
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { securityMiddleware } from './lib/security/security-headers';
+import { generateNonce, applySecurityHeaders } from './lib/security/security-headers';
 import { rateLimit, createRateLimitHeaders } from './lib/security/rate-limiter-config';
 
 export async function middleware(request: NextRequest) {
-  // Apply security headers first
-  let response = securityMiddleware(request);
+  // Generate a nonce for this request
+  const nonce = generateNonce();
+  
+  // Create response with security headers and nonce
+  let response = NextResponse.next();
+  response = applySecurityHeaders(response, request, nonce);
   
   // Apply rate limiting to API routes
   if (request.nextUrl.pathname.startsWith('/api/')) {
@@ -106,10 +110,8 @@ export async function middleware(request: NextRequest) {
     response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet');
   }
 
-  // Add security headers for all responses
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('X-Frame-Options', 'DENY');
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Ensure the nonce is available for the layout
+  response.headers.set('X-CSP-Nonce', nonce);
   
   return response;
 }
