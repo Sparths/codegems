@@ -59,18 +59,26 @@ const UserProfileContent = () => {
       // Fetch user stats
       const fetchStats = async () => {
         try {
-          const [ratingsRes, commentsRes] = await Promise.all([
+          const [ratingsRes, commentsRes, requestsRes] = await Promise.all([
             fetch(`/api/ratings?userId=${user.id}`),
             fetch(`/api/comments?userId=${user.id}`),
+            fetch(`/api/project-requests?userId=${user.id}`),
           ]);
 
           const ratings = await ratingsRes.json();
           const comments = await commentsRes.json();
+          const requests = await requestsRes.json();
+
+          // Count accepted submissions
+          const acceptedSubmissions = requests.filter((req: any) => req.status === 'accepted').length;
+          
+          console.log('Project requests:', requests);
+          console.log('Accepted submissions count:', acceptedSubmissions);
 
           setStats({
             ratings: ratings.length,
             comments: comments.length,
-            submissions: 0, // Will be updated when we fetch project requests
+            submissions: acceptedSubmissions,
           });
         } catch (error) {
           console.error("Error fetching user stats:", error);
@@ -187,7 +195,7 @@ const UserProfileContent = () => {
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
                         <FileText className="text-green-500 w-4 h-4" />
-                        <span className="text-sm">Submissions</span>
+                        <span className="text-sm">Accepted Projects</span>
                       </div>
                       <span className="font-semibold">{stats.submissions}</span>
                     </div>
