@@ -1,11 +1,12 @@
 // lib/security-headers.ts
-import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import React from 'react';
 
-// Generate nonce for CSP
+// Generate nonce for CSP using Web Crypto API (Edge Runtime compatible)
 export function generateNonce(): string {
-  return crypto.randomBytes(16).toString('base64');
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  return btoa(String.fromCharCode(...array));
 }
 
 // Security headers configuration
