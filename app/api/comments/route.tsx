@@ -1,18 +1,9 @@
 import { NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { generateUUID } from "@/lib/utils-uuid";
-import { rateLimit, createRateLimitHeaders } from "@/lib/rate-limiter";
+import { sanitizeInput } from "@/lib/security/sanitization";
 
-// Input validation and sanitization
-const sanitizeInput = (input: string): string => {
-  // Remove potentially dangerous characters and trim
-  return input
-    .replace(/[<>]/g, '') // Remove < and > to prevent XSS
-    .replace(/javascript:/gi, '') // Remove javascript: protocol
-    .replace(/on\w+=/gi, '') // Remove event handlers
-    .trim();
-};
-
+// Validation
 const validateComment = (text: string): boolean => {
   return text.length >= 1 && text.length <= 2000;
 };
@@ -30,26 +21,6 @@ const validateUserId = (userId: string): boolean => {
 // GET: Fetch comments
 export async function GET(request: Request) {
   try {
-    // Apply rate limiting with better limits
-    const rateLimitResult = await rateLimit(request, 'comments');
-    const rateLimitHeaders = createRateLimitHeaders(rateLimitResult);
-    
-    if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { 
-          error: "Too many requests", 
-          retryAfter: rateLimitResult.reset 
-        },
-        { 
-          status: 429,
-          headers: {
-            ...rateLimitHeaders,
-            'Retry-After': rateLimitResult.reset?.toString() || '300'
-          }
-        }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
     const projectName = searchParams.get("project");
     const userId = searchParams.get("userId");
@@ -61,14 +32,14 @@ export async function GET(request: Request) {
     if (sanitizedProjectName && !validateProjectName(sanitizedProjectName)) {
       return NextResponse.json(
         { error: "Invalid project name" },
-        { status: 400, headers: rateLimitHeaders }
+        { status: 400 }
       );
     }
 
     if (sanitizedUserId && !validateUserId(sanitizedUserId)) {
       return NextResponse.json(
         { error: "Invalid user ID" },
-        { status: 400, headers: rateLimitHeaders }
+        { status: 400 }
       );
     }
 
@@ -91,11 +62,11 @@ export async function GET(request: Request) {
       console.error("Error getting comments:", error);
       return NextResponse.json(
         { error: "Failed to get comments" },
-        { status: 500, headers: rateLimitHeaders }
+        { status: 500 }
       );
     }
 
-    return NextResponse.json(comments || [], { headers: rateLimitHeaders });
+    return NextResponse.json(comments || []);
   } catch (error) {
     console.error("Error getting comments:", error);
     return NextResponse.json(
@@ -108,26 +79,6 @@ export async function GET(request: Request) {
 // POST: Create a new comment
 export async function POST(request: Request) {
   try {
-    // Apply rate limiting
-    const rateLimitResult = await rateLimit(request, 'comments');
-    const rateLimitHeaders = createRateLimitHeaders(rateLimitResult);
-    
-    if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { 
-          error: "Too many comments. Please wait before posting again.",
-          retryAfter: rateLimitResult.reset 
-        },
-        { 
-          status: 429,
-          headers: {
-            ...rateLimitHeaders,
-            'Retry-After': rateLimitResult.reset?.toString() || '300'
-          }
-        }
-      );
-    }
-
     const body = await request.json();
     const { projectName, userId, text, parentId } = body;
 
@@ -135,7 +86,7 @@ export async function POST(request: Request) {
     if (!projectName || !userId || !text) {
       return NextResponse.json(
         { error: "Project name, user ID, and comment text are required" },
-        { status: 400, headers: rateLimitHeaders }
+        { status: 400 }
       );
     }
 
@@ -149,21 +100,21 @@ export async function POST(request: Request) {
     if (!validateProjectName(sanitizedProjectName)) {
       return NextResponse.json(
         { error: "Invalid project name" },
-        { status: 400, headers: rateLimitHeaders }
+        { status: 400 }
       );
     }
 
     if (!validateUserId(sanitizedUserId)) {
       return NextResponse.json(
         { error: "Invalid user ID" },
-        { status: 400, headers: rateLimitHeaders }
+        { status: 400 }
       );
     }
 
     if (!validateComment(sanitizedText)) {
       return NextResponse.json(
         { error: "Comment must be between 1 and 2000 characters" },
-        { status: 400, headers: rateLimitHeaders }
+        { status: 400 }
       );
     }
 
@@ -177,7 +128,7 @@ export async function POST(request: Request) {
     if (userError || !user) {
       return NextResponse.json(
         { error: "User authentication failed" },
-        { status: 401, headers: rateLimitHeaders }
+        { status: 401 }
       );
     }
 
@@ -192,7 +143,7 @@ export async function POST(request: Request) {
       if (parentError || !parentComment) {
         return NextResponse.json(
           { error: "Parent comment not found" },
-          { status: 404, headers: rateLimitHeaders }
+          { status: 404 }
         );
       }
     }
@@ -208,7 +159,7 @@ export async function POST(request: Request) {
     if (recentComments && recentComments.length >= 10) { // Increased from 5 to 10
       return NextResponse.json(
         { error: "Too many recent comments. Please wait before posting again." },
-        { status: 429, headers: rateLimitHeaders }
+        { status: 429 }
       );
     }
 
@@ -224,7 +175,7 @@ export async function POST(request: Request) {
     if (duplicateComment && duplicateComment.length > 0) {
       return NextResponse.json(
         { error: "Duplicate comment detected" },
-        { status: 400, headers: rateLimitHeaders }
+        { status: 400 }
       );
     }
 
@@ -247,7 +198,7 @@ export async function POST(request: Request) {
       console.error("Error inserting comment:", insertError);
       return NextResponse.json(
         { error: "Failed to create comment" },
-        { status: 500, headers: rateLimitHeaders }
+        { status: 500 }
       );
     }
 
@@ -284,7 +235,7 @@ export async function POST(request: Request) {
       // Don't fail the comment creation if points award fails
     }
 
-    return NextResponse.json(newComment, { headers: rateLimitHeaders });
+    return NextResponse.json(newComment);
   } catch (error) {
     console.error("Error creating comment:", error);
     return NextResponse.json(
@@ -297,22 +248,6 @@ export async function POST(request: Request) {
 // PUT: Update a comment (like/unlike/edit)
 export async function PUT(request: Request) {
   try {
-    const rateLimitResult = await rateLimit(request, 'comments');
-    const rateLimitHeaders = createRateLimitHeaders(rateLimitResult);
-    
-    if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { 
-          status: 429,
-          headers: {
-            ...rateLimitHeaders,
-            'Retry-After': rateLimitResult.reset?.toString() || '60'
-          }
-        }
-      );
-    }
-
     const body = await request.json();
     const { commentId, userId, action, text } = body;
 
@@ -320,7 +255,7 @@ export async function PUT(request: Request) {
     if (!commentId || !userId || !action) {
       return NextResponse.json(
         { error: "Comment ID, user ID, and action are required" },
-        { status: 400, headers: rateLimitHeaders }
+        { status: 400 }
       );
     }
 
@@ -333,14 +268,14 @@ export async function PUT(request: Request) {
     if (!["like", "unlike", "edit"].includes(sanitizedAction)) {
       return NextResponse.json(
         { error: "Invalid action" },
-        { status: 400, headers: rateLimitHeaders }
+        { status: 400 }
       );
     }
 
     if (sanitizedAction === "edit" && (!sanitizedText || !validateComment(sanitizedText))) {
       return NextResponse.json(
         { error: "Valid comment text is required for edit action" },
-        { status: 400, headers: rateLimitHeaders }
+        { status: 400 }
       );
     }
 
@@ -354,7 +289,7 @@ export async function PUT(request: Request) {
     if (getCommentError || !comment) {
       return NextResponse.json(
         { error: "Comment not found" },
-        { status: 404, headers: rateLimitHeaders }
+        { status: 404 }
       );
     }
 
@@ -374,7 +309,7 @@ export async function PUT(request: Request) {
       if (comment.user_id !== sanitizedUserId) {
         return NextResponse.json(
           { error: "Not authorized to edit this comment" },
-          { status: 403, headers: rateLimitHeaders }
+          { status: 403 }
         );
       }
       
@@ -396,11 +331,11 @@ export async function PUT(request: Request) {
       console.error("Error updating comment:", updateError);
       return NextResponse.json(
         { error: "Failed to update comment" },
-        { status: 500, headers: rateLimitHeaders }
+        { status: 500 }
       );
     }
 
-    return NextResponse.json(updatedComment, { headers: rateLimitHeaders });
+    return NextResponse.json(updatedComment);
   } catch (error) {
     console.error("Error updating comment:", error);
     return NextResponse.json(
@@ -413,22 +348,6 @@ export async function PUT(request: Request) {
 // DELETE: Delete a comment
 export async function DELETE(request: Request) {
   try {
-    const rateLimitResult = await rateLimit(request, 'comments');
-    const rateLimitHeaders = createRateLimitHeaders(rateLimitResult);
-    
-    if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { 
-          status: 429,
-          headers: {
-            ...rateLimitHeaders,
-            'Retry-After': rateLimitResult.reset?.toString() || '60'
-          }
-        }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
     const commentId = searchParams.get("id");
     const userId = searchParams.get("userId");
@@ -436,7 +355,7 @@ export async function DELETE(request: Request) {
     if (!commentId || !userId) {
       return NextResponse.json(
         { error: "Comment ID and User ID are required" },
-        { status: 400, headers: rateLimitHeaders }
+        { status: 400 }
       );
     }
 
@@ -454,14 +373,14 @@ export async function DELETE(request: Request) {
     if (getCommentError || !comment) {
       return NextResponse.json(
         { error: "Comment not found" },
-        { status: 404, headers: rateLimitHeaders }
+        { status: 404 }
       );
     }
 
     if (comment.user_id !== sanitizedUserId) {
       return NextResponse.json(
         { error: "Not authorized to delete this comment" },
-        { status: 403, headers: rateLimitHeaders }
+        { status: 403 }
       );
     }
 
@@ -475,7 +394,7 @@ export async function DELETE(request: Request) {
       console.error("Error deleting comment:", deleteError);
       return NextResponse.json(
         { error: "Failed to delete comment" },
-        { status: 500, headers: rateLimitHeaders }
+        { status: 500 }
       );
     }
 
@@ -490,7 +409,7 @@ export async function DELETE(request: Request) {
       // Continue execution
     }
 
-    return NextResponse.json({ success: true }, { headers: rateLimitHeaders });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting comment:", error);
     return NextResponse.json(

@@ -1,132 +1,62 @@
 // middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { securityMiddleware } from './lib/security/security-headers';
+import { rateLimit, createRateLimitHeaders } from './lib/security/rate-limiter-config';
 
-// Rate limiting store (in production, use Redis or a database)
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
-
-// Much higher rate limiting configuration
-const RATE_LIMIT_CONFIG = {
-  '/api/auth': { maxRequests: 10000, windowMs: 15 * 60 * 1000 }, // 100 requests per 15 minutes
-  '/api/project-requests': { maxRequests: 10000, windowMs: 60 * 60 * 1000 }, // 50 requests per hour
-  '/api/comments': { maxRequests: 10000, windowMs: 5 * 60 * 1000 }, // 500 requests per 5 minutes
-  '/api/ratings': { maxRequests: 10000, windowMs: 60 * 60 * 1000 }, // 500 requests per hour
-  '/api/users': { maxRequests: 10000, windowMs: 15 * 60 * 1000 }, // 150 requests per 15 minutes
-  'default': { maxRequests: 10000, windowMs: 15 * 60 * 1000 } // 2000 requests per 15 minutes
-};
-
-function getClientIP(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  const realIP = request.headers.get('x-real-ip');
-  const cfIP = request.headers.get('cf-connecting-ip');
+export async function middleware(request: NextRequest) {
+  // Apply security headers first
+  let response = securityMiddleware(request);
   
-  if (cfIP) return cfIP;
-  if (forwarded) return forwarded.split(',')[0].trim();
-  if (realIP) return realIP;
-  
-  // Remove the request.ip fallback since it doesn't exist
-  return 'unknown';
-}
-
-function getRateLimitKey(request: NextRequest): string {
-  const ip = getClientIP(request);
-  const pathname = request.nextUrl.pathname;
-  
-  // Create rate limit key based on IP and endpoint pattern
-  const endpoint = Object.keys(RATE_LIMIT_CONFIG).find(pattern => 
-    pathname.startsWith(pattern)
-  ) || 'default';
-  
-  return `${ip}:${endpoint}`;
-}
-
-function isRateLimited(request: NextRequest): boolean {
-  const key = getRateLimitKey(request);
-  const now = Date.now();
-  const pathname = request.nextUrl.pathname;
-  
-  // Get rate limit config for this endpoint
-  const endpoint = Object.keys(RATE_LIMIT_CONFIG).find(pattern => 
-    pathname.startsWith(pattern)
-  ) || 'default';
-  
-  const config = RATE_LIMIT_CONFIG[endpoint as keyof typeof RATE_LIMIT_CONFIG];
-  
-  const record = rateLimitStore.get(key);
-  
-  if (!record || now > record.resetTime) {
-    // First request or window has reset
-    rateLimitStore.set(key, {
-      count: 1,
-      resetTime: now + config.windowMs
-    });
-    return false;
-  }
-  
-  if (record.count >= config.maxRequests) {
-    return true;
-  }
-  
-  // Increment count
-  record.count++;
-  rateLimitStore.set(key, record);
-  return false;
-}
-
-// Clean up old rate limit records periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, record] of rateLimitStore.entries()) {
-    if (now > record.resetTime) {
-      rateLimitStore.delete(key);
-    }
-  }
-}, 5 * 60 * 1000); // Clean up every 5 minutes
-
-export function middleware(request: NextRequest) {
   // Apply rate limiting to API routes
   if (request.nextUrl.pathname.startsWith('/api/')) {
-    if (isRateLimited(request)) {
+    // Extract the endpoint name for rate limiting
+    const pathname = request.nextUrl.pathname;
+    let endpoint = 'default';
+    
+    // Map API routes to rate limit keys
+    if (pathname.includes('/users') && request.method === 'POST') {
+      const action = request.nextUrl.searchParams.get('action');
+      if (action === 'login') endpoint = 'users_login';
+      else if (action === 'check_badges') endpoint = 'default';
+      else endpoint = 'users_create';
+    } else if (pathname.includes('/users') && request.method === 'GET') {
+      endpoint = 'users_get';
+    } else if (pathname.includes('/users') && request.method === 'PUT') {
+      endpoint = 'users_update';
+    } else if (pathname.includes('/project-requests')) {
+      endpoint = 'project_requests';
+    } else if (pathname.includes('/comments')) {
+      endpoint = 'comments';
+    } else if (pathname.includes('/ratings')) {
+      endpoint = 'ratings';
+    } else if (pathname.includes('/admin/verify')) {
+      endpoint = 'admin_verify';
+    }
+    
+    const rateLimitResult = await rateLimit(request, endpoint);
+    
+    if (!rateLimitResult.success) {
       return new NextResponse(
         JSON.stringify({ error: 'Too many requests. Please try again later.' }),
         {
           status: 429,
           headers: {
             'Content-Type': 'application/json',
-            'Retry-After': '900' // 15 minutes
+            ...createRateLimitHeaders(rateLimitResult),
+            'Retry-After': rateLimitResult.reset?.toString() || '60'
           }
         }
       );
     }
+    
+    // Add rate limit headers to successful responses
+    const rateLimitHeaders = createRateLimitHeaders(rateLimitResult);
+    Object.entries(rateLimitHeaders).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
   }
-
-  const response = NextResponse.next();
-
-  // Add security headers with updated CSP for Vercel Analytics
-  response.headers.set('X-Frame-Options', 'DENY');
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  response.headers.set('X-XSS-Protection', '1; mode=block');
   
-  // Updated CSP to allow Vercel Analytics
-  response.headers.set(
-    'Content-Security-Policy',
-    [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://cdnjs.cloudflare.com https://va.vercel-scripts.com",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https: blob:",
-      "font-src 'self' data:",
-      "connect-src 'self' https://api.github.com https://*.supabase.co wss://*.supabase.co https://vitals.vercel-insights.com https://va.vercel-scripts.com",
-      "frame-src 'none'",
-      "manifest-src 'self'"
-    ].join('; ')
-  );
-  
-  // Remove server information
-  response.headers.delete('Server');
-  response.headers.delete('X-Powered-By');
-
   return response;
 }
 

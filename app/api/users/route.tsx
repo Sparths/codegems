@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import supabase from "@/lib/supabase";
-import { rateLimit } from "@/lib/rate-limiter";
+import { sanitizeInput, isValidEmail, isValidUsername } from "@/lib/security/sanitization";
 
 interface Badge {
   id: string;
@@ -11,17 +11,7 @@ interface Badge {
   points: number;
 }
 
-// Input validation helpers
-const validateEmail = (email: string): boolean => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email) && email.length <= 254;
-};
-
-const validateUsername = (username: string): boolean => {
-  const usernameRegex = /^[a-zA-Z0-9_-]{3,30}$/;
-  return usernameRegex.test(username);
-};
-
+// Validate password
 const validatePassword = (password: string): boolean => {
   // At least 8 characters, one uppercase, one lowercase, one number, one special char
   const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,128}$/;
@@ -30,11 +20,6 @@ const validatePassword = (password: string): boolean => {
 
 const validateDisplayName = (displayName: string): boolean => {
   return displayName.trim().length >= 1 && displayName.length <= 50;
-};
-
-// Sanitize input to prevent XSS
-const sanitizeInput = (input: string): string => {
-  return input.replace(/[<>]/g, '').trim();
 };
 
 // Hash password securely
@@ -50,15 +35,6 @@ const generateSalt = (): string => {
 // Create user (Registration) - NOT EXPORTED
 async function createUser(request: Request) {
   try {
-    // Apply rate limiting
-    const rateLimitResult = await rateLimit(request, 'users_create');
-    if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: "Too many registration attempts" },
-        { status: 429 }
-      );
-    }
-
     const body = await request.json();
     const { username, password, email, displayName } = body;
 
@@ -74,14 +50,14 @@ async function createUser(request: Request) {
     const sanitizedEmail = sanitizeInput(email);
     const sanitizedDisplayName = displayName ? sanitizeInput(displayName) : sanitizedUsername;
 
-    if (!validateUsername(sanitizedUsername)) {
+    if (!isValidUsername(sanitizedUsername)) {
       return NextResponse.json(
         { error: "Username must be 3-30 characters, alphanumeric, underscore, or hyphen only" },
         { status: 400 }
       );
     }
 
-    if (!validateEmail(sanitizedEmail)) {
+    if (!isValidEmail(sanitizedEmail)) {
       return NextResponse.json(
         { error: "Invalid email format" },
         { status: 400 }
@@ -189,15 +165,6 @@ async function createUser(request: Request) {
 // Login - NOT EXPORTED
 async function loginUser(request: Request) {
   try {
-    // Apply rate limiting
-    const rateLimitResult = await rateLimit(request, 'users_login');
-    if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: "Too many login attempts" },
-        { status: 429 }
-      );
-    }
-
     const body = await request.json();
     const { username, password } = body;
 
@@ -210,7 +177,7 @@ async function loginUser(request: Request) {
 
     const sanitizedUsername = sanitizeInput(username);
 
-    if (!validateUsername(sanitizedUsername)) {
+    if (!isValidUsername(sanitizedUsername)) {
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
@@ -269,15 +236,6 @@ async function loginUser(request: Request) {
 // Update user (with proper authorization) - NOT EXPORTED
 async function updateUser(request: Request) {
   try {
-    // Apply rate limiting
-    const rateLimitResult = await rateLimit(request, 'users_update');
-    if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: "Too many update attempts" },
-        { status: 429 }
-      );
-    }
-
     const body = await request.json();
     const { id, displayName, currentPassword, newPassword } = body;
 
@@ -471,15 +429,6 @@ async function checkBadges(request: Request) {
 // GET: Retrieve users (with proper authorization)
 export async function GET(request: Request) {
   try {
-    // Apply rate limiting
-    const rateLimitResult = await rateLimit(request, 'users_get');
-    if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429 }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("id");
     const username = searchParams.get("username");

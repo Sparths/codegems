@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from '@supabase/supabase-js';
+import { createSecureAdminToken, verifySecureAdminToken } from '@/lib/security/secure-token';
+import { sanitizeInput } from '@/lib/security/sanitization';
 
 // Admin verification with service role
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -17,11 +19,6 @@ const getAuthorizedAdmins = (): string[] => {
     return [];
   }
   return adminList.split(',').map(admin => admin.trim());
-};
-
-// Input sanitization
-const sanitizeInput = (input: string): string => {
-  return input.replace(/[<>]/g, '').trim();
 };
 
 export async function POST(request: Request) {
@@ -52,15 +49,8 @@ export async function POST(request: Request) {
     if (authorizedAdmins.includes(sanitizedUserId)) {
       console.log("User found in direct admin list:", sanitizedUserId);
       
-      // Create admin session token for subsequent requests
-      const adminSession = {
-        userId: sanitizedUserId,
-        timestamp: Date.now(),
-        verified: true,
-        isAdmin: true
-      };
-
-      const adminToken = Buffer.from(JSON.stringify(adminSession)).toString('base64');
+      // Create secure admin session token
+      const adminToken = createSecureAdminToken(sanitizedUserId);
 
       return NextResponse.json({
         success: true,
@@ -108,15 +98,8 @@ export async function POST(request: Request) {
         if (isAdmin) {
           console.log("User verified as admin");
           
-          // Create admin session token for subsequent requests
-          const adminSession = {
-            userId: sanitizedUserId,
-            timestamp: Date.now(),
-            verified: true,
-            isAdmin: true
-          };
-
-          const adminToken = Buffer.from(JSON.stringify(adminSession)).toString('base64');
+          // Create secure admin session token
+          const adminToken = createSecureAdminToken(sanitizedUserId);
 
           return NextResponse.json({
             success: true,
@@ -160,11 +143,25 @@ export async function POST(request: Request) {
   }
 }
 
-// Optional: GET method to check current admin status
+// GET method to check current admin status
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
+
+    // Check for admin token in Authorization header
+    const authHeader = request.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const verification = verifySecureAdminToken(token);
+      
+      if (verification.isValid) {
+        return NextResponse.json({
+          isAdmin: true,
+          userId: verification.userId
+        });
+      }
+    }
 
     if (!userId) {
       return NextResponse.json(
