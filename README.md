@@ -58,9 +58,9 @@ Open an issue or submit a pull request to get started.
 
 <a href="https://star-history.com/#bebedi15/codegems&Timeline">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=bebedi15/codegems&type=Timeline&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=bebedi15/codegems&type=Timeline" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=bebedi15/codegems&type=Timeline" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=sparths/codegems&type=Timeline&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=sparths/codegems&type=Timeline" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=sparths/codegems&type=Timeline" />
  </picture>
 </a>
 
