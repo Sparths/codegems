@@ -23,48 +23,48 @@ const rateLimitStore = new LRUCache<string, RateLimitRecord>({
 export const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
   // Authentication endpoints - strict limits
   'users_create': { 
-    maxRequests: 3, 
+    maxRequests: 1000, 
     windowMs: 15 * 60 * 1000 // 3 registrations per 15 minutes per IP
   },
   'users_login': { 
-    maxRequests: 5, 
+    maxRequests: 1000, 
     windowMs: 15 * 60 * 1000, // 5 login attempts per 15 minutes
     skipSuccessfulRequests: true // Don't count successful logins
   },
   'users_update': { 
-    maxRequests: 10, 
+    maxRequests: 1000, 
     windowMs: 5 * 60 * 1000 // 10 updates per 5 minutes
   },
   
   // Read operations - more lenient
   'users_get': { 
-    maxRequests: 100, 
+    maxRequests: 1000, 
     windowMs: 5 * 60 * 1000 // 100 gets per 5 minutes
   },
   
   // Content creation - moderate limits
   'project_requests': { 
-    maxRequests: 5, 
+    maxRequests: 1000, 
     windowMs: 60 * 60 * 1000 // 5 project requests per hour
   },
   'comments': { 
-    maxRequests: 20, 
+    maxRequests: 1000, 
     windowMs: 5 * 60 * 1000 // 20 comments per 5 minutes
   },
   'ratings': { 
-    maxRequests: 30, 
+    maxRequests: 1000, 
     windowMs: 60 * 60 * 1000 // 30 ratings per hour
   },
   
   // Admin endpoints - special handling
   'admin_verify': { 
-    maxRequests: 10, 
+    maxRequests: 1000, 
     windowMs: 60 * 60 * 1000 // 10 verifications per hour
   },
   
   // Default for other endpoints
   'default': { 
-    maxRequests: 60, 
+    maxRequests: 1000, 
     windowMs: 60 * 1000 // 60 requests per minute
   }
 };

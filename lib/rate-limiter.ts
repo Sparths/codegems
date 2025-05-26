@@ -14,14 +14,14 @@ const rateLimitStore = new Map<string, RateLimitRecord>();
 
 // Much higher rate limiting configurations
 const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
-  'users_create': { maxRequests: 10000, windowMs: 15 * 60 * 1000 }, // 50 registrations per 15 minutes
-  'users_login': { maxRequests: 10000, windowMs: 15 * 60 * 1000 }, // 100 login attempts per 15 minutes
-  'users_update': { maxRequests: 10000, windowMs: 5 * 60 * 1000 }, // 100 updates per 5 minutes
-  'users_get': { maxRequests: 10000, windowMs: 5 * 60 * 1000 }, // 1000 gets per 5 minutes
-  'project_requests': { maxRequests: 10000, windowMs: 60 * 60 * 1000 }, // 50 requests per hour
-  'comments': { maxRequests: 10000, windowMs: 5 * 60 * 1000 }, // 500 comments per 5 minutes
-  'ratings': { maxRequests: 10000, windowMs: 60 * 60 * 1000 }, // 500 ratings per hour
-  'default': { maxRequests: 10000, windowMs: 15 * 60 * 1000 } // 2000 requests per 15 minutes
+  'users_create': { maxRequests: 1000, windowMs: 15 * 60 * 1000 }, // 50 registrations per 15 minutes
+  'users_login': { maxRequests: 1000, windowMs: 15 * 60 * 1000 }, // 100 login attempts per 15 minutes
+  'users_update': { maxRequests: 1000, windowMs: 5 * 60 * 1000 }, // 100 updates per 5 minutes
+  'users_get': { maxRequests: 1000, windowMs: 5 * 60 * 1000 }, // 1000 gets per 5 minutes
+  'project_requests': { maxRequests: 1000, windowMs: 60 * 60 * 1000 }, // 50 requests per hour
+  'comments': { maxRequests: 1000, windowMs: 5 * 60 * 1000 }, // 500 comments per 5 minutes
+  'ratings': { maxRequests: 1000, windowMs: 60 * 60 * 1000 }, // 500 ratings per hour
+  'default': { maxRequests: 1000, windowMs: 15 * 60 * 1000 } // 2000 requests per 15 minutes
 };
 
 function getClientIP(request: Request): string {
